@@ -64,6 +64,10 @@ real-studio/
 └── docs/                  # Documentation
 ```
 
+## Documentation
+
+For technical documentation, architecture decisions, and product rationale, see the [docs/](docs/) directory.
+
 ## Prerequisites
 
 - **OS:** Windows 10+ or Linux
