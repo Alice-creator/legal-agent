@@ -26,10 +26,11 @@ for i, filename in enumerate(files):
 
         result = {
             "filename": filename,
-            "opening": sections.get("opening", ""),
-            "noi_dung_vu_an": sections.get("NỘI DUNG VỤ ÁN", ""),
-            "nhan_dinh_cua_toa_an": sections.get("NHẬN ĐỊNH CỦA TÒA ÁN", ""),
-            "quyet_dinh": sections.get("QUYẾT ĐỊNH", ""),
+            "full_text": full_text,
+            "opening": sections["opening"],
+            "noi_dung_vu_an": sections["noi_dung_vu_an"],
+            "nhan_dinh_cua_toa_an": sections["nhan_dinh_cua_toa_an"],
+            "quyet_dinh": sections["quyet_dinh"],
         }
 
         with open(json_path, "w", encoding="utf-8") as f:
