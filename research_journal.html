@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nhật ký nghiên cứu — Legal Agent</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--line:#2b3340;--txt:#e6edf3;--muted:#8b949e;
+    --blue:#388bfd;--green:#2ea043;--amber:#d29922;--red:#da3633;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.65 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:30px 18px 70px}
+  .wrap{max-width:900px;margin:0 auto}
+  .kicker{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  h1{font-size:25px;margin:0 0 10px}
+  .project{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--blue);
+    border-radius:8px;padding:11px 16px;font-size:14px;margin:0 0 28px}
+  .l0{color:#f85149;font-weight:800}
+
+  .session{border:1px solid var(--line);border-radius:12px;margin-bottom:26px;overflow:hidden;background:#0f141a}
+  .session-head{padding:16px 20px 17px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#1a212b,#13181f)}
+  .snum{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;color:#0e1116;
+    background:var(--green);padding:3px 9px;border-radius:6px;vertical-align:middle}
+  .sdate{color:var(--muted);font-size:12.5px;margin-left:10px}
+  .session-head h2{font-size:19px;margin:11px 0 8px}
+  .sgoal{font-size:13.5px;margin:0 0 5px} .sgoal b{color:#fff}
+  .senv{color:var(--muted);font-size:12px;margin:0}
+  .session-body{padding:22px 20px 8px}
+  .session.next{opacity:.62} .session.next .snum{background:var(--muted)}
+
+  .timeline{position:relative;padding-left:26px}
+  .timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .entry{position:relative;margin-bottom:22px}
+  .entry::before{content:"";position:absolute;left:-23px;top:5px;width:12px;height:12px;border-radius:50%;
+    background:var(--panel);border:2px solid var(--blue)}
+  .entry.corr::before{border-color:var(--red)} .entry.dec::before{border-color:var(--green)}
+  .entry .ph{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+  .entry h3{font-size:16px;margin:1px 0 8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 15px;margin-top:6px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;margin-right:6px}
+  .t-inv{background:rgba(56,139,253,.16);color:#79c0ff}
+  .t-data{background:rgba(46,160,67,.16);color:#3fb950}
+  .t-dec{background:rgba(210,153,34,.16);color:#e3b341}
+  .t-corr{background:rgba(218,54,51,.16);color:#f85149}
+  p{margin:7px 0} ul{margin:7px 0;padding-left:20px} li{margin:4px 0}
+  .data{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#0e1116;border:1px solid var(--line);
+    border-radius:6px;padding:8px 11px;margin:8px 0;color:#cdd6e0;white-space:pre-wrap}
+  code{background:#1b212a;padding:1px 5px;border-radius:4px;font-size:12.5px;color:#d2a8ff}
+  b{color:#fff}
+  .card svg{width:100%;height:auto;display:block;margin:8px 0 2px}
+  .ex{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#cdd6e0}
+  h4.sec{font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+    border-bottom:1px solid var(--line);padding-bottom:7px;margin:26px 0 12px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:13.5px}
+  .kv div:nth-child(odd){color:var(--muted)}
+  .open{border-left:3px solid var(--amber);padding:2px 0 2px 14px;margin-top:6px}
+  .legend{font-size:11.5px;color:var(--muted);margin:14px 0 0;display:flex;gap:14px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">📓 Sổ nhật ký nghiên cứu</div>
+  <h1>Legal Agent</h1>
+  <p class="project"><b>Dự án:</b> hỗ trợ <b>hội đồng xét xử</b> — khi chuẩn bị tuyên án, tra cứu các vụ đã xử trước đó có nội dung tương tự để tham khảo (hướng tới nhất quán giữa các bản án). Kho tra cứu = <b>35.000 bản án Toà án VN</b> để model truy vấn.</p>
+
+  <section class="session">
+    <div class="session-head">
+      <span class="snum">PHIÊN 1</span><span class="sdate">2026-06-08 → 06-09</span>
+      <h2>Dựng pipeline trích xuất dữ liệu từ tài liệu</h2>
+      <p class="sgoal"><b>Mục tiêu:</b> từ code mới chỉ có pha trích xuất → biến 35.089 PDF thành <code>{filename, route, full_text}</code> sạch, chuẩn hoá, chạy <span class="l0">100% LOCAL-$0</span>, sẵn sàng cho embedding.</p>
+      <p class="senv">Máy: Apple M5 · 32GB unified RAM (~25GB GPU Metal)</p>
+    </div>
+    <div class="session-body">
+      <div class="timeline">
+
+        <div class="entry">
+          <span class="ph">① Khởi đầu</span>
+          <h3>Đọc code &amp; phát hiện tài liệu lệch thực tế</h3>
+          <div class="card">
+            <p><span class="tag t-inv">KHẢO SÁT</span> Repo mới có pha trích xuất (<code>main.py</code>/<code>utils.py</code>). Mục tiêu sản phẩm: giúp <b>hội đồng xét xử</b> tra các vụ đã xử tương tự (theo <i>nội dung vụ án</i>) để tham khảo khi tuyên án.</p>
+            <p><span class="tag t-data">PHÁT HIỆN</span> docs ghi dùng Surya OCR + Gemini 2.0 Flash + multilingual-e5; còn code thực tế dùng ollama vision (<code>gemma4:31b</code> trên cloud) và chưa hề có bước embedding.</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">② Khảo sát dữ liệu</span>
+          <h3>Chất lượng text PyMuPDF &amp; phân loại tài liệu</h3>
+          <div class="card">
+            <p>PyMuPDF (đọc chữ số hoá sẵn trong PDF) cho ra text với 3 kiểu lỗi nguồn:</p>
+            <ul>
+              <li><b>glued</b> — nuốt mất dấu cách: <span class="ex">CHỦNGHĨA</span> (đáng ra "CHỦ NGHĨA"). Chữ đúng, chỉ thiếu space.</li>
+              <li><b>legacy</b> — font cũ TCVN3/VNI, PyMuPDF đọc byte ra sai ký tự: <span class="ex">Tßa ¸n nh©n d©n</span> = "Tòa án nhân dân".</li>
+              <li><b>scanned</b> — trang là ảnh chụp, không có chữ để đọc.</li>
+            </ul>
+            <p><span class="tag t-data">SỐ LIỆU — đếm từng trang (800 doc)</span></p>
+            <div class="data">78.9% trang là chữ · 18.2% trang ẢNH (get_text trả rỗng) · 0.3% cả-hai · 2.5% trống
+→ mỗi trang gần như CHỈ chữ HOẶC CHỈ ảnh (0.3% "cả-hai" thật ra là trang chữ có thêm con dấu)</div>
+            <p><span class="tag t-data">SỐ LIỆU — đếm từng doc (1000 doc)</span></p>
+            <div class="data">clean 67% · glued 14% · scanned 17% · legacy ~2%</div>
+          </div>
+        </div>
+
+        <div class="entry corr">
+          <span class="ph">③ Đính chính</span>
+          <h3>Con số "60% tài liệu bị dính chữ" — đo lại thì sai</h3>
+          <div class="card">
+            <p><span class="tag t-corr">ĐÍNH CHÍNH</span> Ban đầu tôi báo <b>~60% tài liệu bị dính chữ</b> (mất dấu cách). <b>Sai.</b></p>
+            <p>Cách tôi đếm bị lỗi: nó <b>tưởng nhầm những từ VIẾT HOA bình thường</b> của tiếng Việt (như <span class="ex">NGUYÊN</span>, <span class="ex">THƯƠNG</span> — vốn 6-7 chữ cái hoa liền nhau) <b>là chữ bị dính</b>. Vì vậy đếm dư rất nhiều.</p>
+            <p>Sau khi sửa cách nhận diện cho chặt hơn (chỉ tính những dấu hiệu dính thật sự), tỷ lệ dính thật chỉ còn <b>~11-14%</b> — không phải 60%.</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">④ Vấn đề lớn nhất</span>
+          <h3>~60% tài liệu KHÔNG có phần "Nội dung vụ án"</h3>
+          <div class="card">
+            <p><span class="tag t-data">PHÁT HIỆN</span> 63% tài liệu (174/275 mẫu) có trường <code>noi_dung_vu_an</code> <b>rỗng</b> — vì phần lớn là <b>quyết định thủ tục</b> (đình chỉ, công nhận thoả thuận...) chứ không phải bản án đầy đủ, nên vốn không có phần này.</p>
+            <p>Đây là <b>vấn đề ở tiền đề sản phẩm</b>, không phải lỗi code: nếu search dựa vào "nội dung vụ án" thì quá nửa kho dữ liệu không tìm được.</p>
+            <p><span class="tag t-dec">QUYẾT ĐỊNH</span> Gác lại, làm <b>full_text</b> (toàn văn) cho chuẩn trước. Vì mọi tài liệu đều có full_text → nếu sau này embed full_text thì vấn đề 60% này tự biến mất.</p>
+          </div>
+        </div>
+
+        <div class="entry dec">
+          <span class="ph">⑤ Giải pháp cho "dính chữ"</span>
+          <h3>Tự cắt lại dấu cách bằng từ điển âm tiết (không dùng AI)</h3>
+          <div class="card">
+            <p><b>Bài toán:</b> biến <span class="ex">CHỦNGHĨA</span> → <span class="ex">CHỦ NGHĨA</span> — chèn lại dấu cách vào chuỗi chữ dính liền.</p>
+            <p><span class="tag t-inv">RESEARCH WEB</span> Các thư viện tách từ tiếng Việt có sẵn (pyvi, underthesea, VnCoreNLP) làm <b>việc ngược lại</b>: chúng giả định text ĐÃ có dấu cách giữa các âm tiết, rồi <i>gộp</i> âm tiết thành từ ("học sinh"→"học_sinh"). Mình cần điều ngược: <i>cắt</i> một cụm dính liền ra thành các âm tiết. Không thư viện nào làm sẵn việc này.</p>
+            <p>Nhưng <b>nguyên liệu thì có</b>: một danh sách <b>7.184 âm tiết tiếng Việt, kèm độ phổ biến</b> (nguồn hieuthi trên GitHub).</p>
+            <p><span class="tag t-dec">QUYẾT ĐỊNH</span> Tự viết bộ cắt chuỗi kiểu <code>wordninja</code> (công cụ tách chuỗi dính của tiếng Anh): với mỗi cụm dính, <b>thử mọi cách cắt thành các âm tiết hợp lệ, chọn cách "tự nhiên nhất"</b> (ưu tiên âm tiết phổ biến). Chỉ dùng từ điển + xác suất, <b>không dùng model/AI</b> → nhanh, miễn phí, không bịa.</p>
+            <p>Ba tình huống phải xử lý riêng:</p>
+            <ul>
+              <li><b>Vị trí dấu thanh khác nhau:</b> tiếng Việt có 2 kiểu viết cùng một từ — <span class="ex">thỏa</span> (kiểu cũ) và <span class="ex">thoả</span> (kiểu mới). Làm cho việc tra từ điển coi 2 kiểu là một; nếu không, "thỏa" sẽ không khớp từ điển (vốn lưu "thoả") và bị cắt bậy.</li>
+              <li><b>Bỏ qua từ nước ngoài:</b> từ tiếng Anh / tên riêng (<span class="ex">photo</span>, <span class="ex">HANTAO</span>) đôi khi tình cờ cắt được thành "âm tiết VN" → cắt sai. Quy tắc: từ thuần ASCII (không có dấu tiếng Việt) thì để nguyên, không đụng.</li>
+              <li><b>Sửa chữ HOA lạc giữa từ:</b> vài tài liệu có chữ hoa lọt giữa từ (<span class="ex">tHành</span> đáng ra "thành") → sửa về thường. Nhưng chữ hoa ở CUỐI (<span class="ex">phốC</span>) lại là tên viết tắt bị dính ("phố C") → giữ nguyên, không gộp.</li>
+            </ul>
+            <p><span class="tag t-data">KẾT QUẢ</span></p>
+            <ul>
+              <li><b>0 corruption</b> — chưa từng đổi nhầm một ký tự thật nào (chỉ thêm dấu cách).</li>
+              <li><b>0 cắt nhầm trên 20 tài liệu vốn đã sạch</b> — không phá text tốt.</li>
+              <li><b>Số chỗ dính: 2049 → 989 (giảm 51%)</b> trên 1000 tài liệu.</li>
+              <li><b>7ms / tài liệu, $0</b> — nhanh, không tốn gì.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="entry dec">
+          <span class="ph">⑥ Định tuyến (routing) + chuẩn hoá</span>
+          <h3>Mỗi loại tài liệu đi một nhánh, rồi gom về 1 dạng chuẩn</h3>
+          <div class="card">
+            <p><span class="tag t-dec">QUYẾT ĐỊNH</span> Tuỳ loại tài liệu, đưa vào nhánh xử lý khác nhau; cái nào hỏng không cứu được thì <b>bỏ và ghi log</b>:</p>
+            <svg viewBox="0 0 820 452" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+              <defs><marker id="a" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto">
+                <path d="M0,0 L6.5,3 L0,6 Z" fill="#5b6470"/></marker></defs>
+              <g stroke="#4a5360" stroke-width="1.6" fill="none" marker-end="url(#a)">
+                <path d="M410,56 L410,76"/>
+                <path d="M410,130 L410,150"/>
+                <path d="M410,198 L102,222"/><path d="M410,198 L307,222"/>
+                <path d="M410,198 L512,222"/><path d="M410,198 L717,222"/>
+                <path d="M102,284 L398,310"/><path d="M307,284 L406,310"/><path d="M512,284 L420,310"/>
+                <path d="M410,360 L410,382"/>
+              </g>
+              <!-- input -->
+              <g><rect x="300" y="12" width="220" height="44" rx="9" fill="#161b22" stroke="#3a424d" stroke-width="1.5"/>
+                <text x="410" y="39" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">📄 35.089 PDF</text></g>
+              <!-- get_text -->
+              <g><rect x="250" y="78" width="320" height="52" rx="9" fill="#161b22" stroke="#d29922" stroke-width="1.6"/>
+                <text x="410" y="100" text-anchor="middle" fill="#e6edf3" font-size="13.5" font-weight="600">PyMuPDF get_text() — đọc chữ mỗi trang</text>
+                <text x="410" y="118" text-anchor="middle" fill="#8b949e" font-size="11">trang ảnh thì trả rỗng → sẽ qua OCR</text></g>
+              <!-- classify -->
+              <g><rect x="292" y="150" width="236" height="46" rx="9" fill="#161b22" stroke="#388bfd" stroke-width="1.6"/>
+                <text x="410" y="178" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">_classify() — phân nhánh</text></g>
+              <!-- branches -->
+              <g><rect x="10" y="222" width="184" height="62" rx="9" fill="#161b22" stroke="#2ea043" stroke-width="1.7"/>
+                <text x="102" y="248" text-anchor="middle" fill="#e6edf3" font-size="13.5" font-weight="700">clean 67%</text>
+                <text x="102" y="268" text-anchor="middle" fill="#8b949e" font-size="11">PyMuPDF thẳng · free</text></g>
+              <g><rect x="215" y="222" width="184" height="62" rx="9" fill="#161b22" stroke="#2ea043" stroke-width="1.7"/>
+                <text x="307" y="248" text-anchor="middle" fill="#e6edf3" font-size="13.5" font-weight="700">glued 14%</text>
+                <text x="307" y="268" text-anchor="middle" fill="#8b949e" font-size="11">splitter âm tiết · free</text></g>
+              <g><rect x="420" y="222" width="184" height="62" rx="9" fill="#161b22" stroke="#2ea043" stroke-width="1.7"/>
+                <text x="512" y="248" text-anchor="middle" fill="#e6edf3" font-size="13.5" font-weight="700">scanned 17%</text>
+                <text x="512" y="268" text-anchor="middle" fill="#3fb950" font-size="11">Surya OCR · local GPU</text></g>
+              <g><rect x="625" y="222" width="184" height="62" rx="9" fill="#1d1517" stroke="#da3633" stroke-width="1.7" stroke-dasharray="6 4"/>
+                <text x="717" y="248" text-anchor="middle" fill="#e6edf3" font-size="13.5" font-weight="700">❌ BỎ ~2%</text>
+                <text x="717" y="268" text-anchor="middle" fill="#f0a3a1" font-size="10.5">legacy + holes · ghi log</text></g>
+              <!-- standardize -->
+              <g><rect x="280" y="310" width="260" height="50" rx="9" fill="#161b22" stroke="#2ea043" stroke-width="1.7"/>
+                <text x="410" y="332" text-anchor="middle" fill="#e6edf3" font-size="13.5" font-weight="600">_standardize() — gom về 1 dạng</text>
+                <text x="410" y="350" text-anchor="middle" fill="#8b949e" font-size="10.5">NFC · sửa dấu gạch · lọc số trang · gọn space</text></g>
+              <!-- output -->
+              <g><rect x="270" y="382" width="280" height="48" rx="9" fill="#161b22" stroke="#388bfd" stroke-width="1.7"/>
+                <text x="410" y="404" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="700">JSON {filename, route, full_text}</text>
+                <text x="410" y="421" text-anchor="middle" fill="#8b949e" font-size="10.5">đầu ra chuẩn cho mỗi tài liệu</text></g>
+            </svg>
+            <p style="font-size:13px;color:var(--muted);margin-top:10px">
+              <b style="color:#f0a3a1">Vì sao BỎ legacy &amp; holes:</b> <b>legacy</b> = font cũ đọc ra chữ sai tận gốc, vá nửa vời chỉ làm gãy cấu trúc. <b>holes</b> = tài liệu chữ nhưng dính vài trang ảnh (&lt;30%) — bỏ trang đó thì doc thủng lỗ → embedding rác. Cả hai: bỏ cả doc + ghi <code>skipped_legacy.log</code> để truy lại được.
+            </p>
+            <p style="font-size:13px;color:var(--muted)">
+              <b style="color:#e3b341">_standardize</b> chạy cho mọi nhánh để text đồng nhất: chuẩn hoá encoding (NFC) · cắt lại dấu cách · đổi mọi loại gạch ngang về <code>-</code> · bỏ số trang lạc (chỉ bỏ ở đầu/cuối trang, giữ số nội dung như "405") · gọn khoảng trắng · <b>GIỮ hoa-thường</b> (model e5 phân biệt hoa-thường, viết thường hết sẽ hại).
+            </p>
+          </div>
+        </div>
+
+        <div class="entry corr">
+          <span class="ph">⑦ Đính chính</span>
+          <h3>"OCR bị mất dấu 7%" — không phải do batch hay model</h3>
+          <div class="card">
+            <p><b>Bối cảnh:</b> trước đó tôi thấy ~7% tài liệu khi OCR bị <b>mất dấu tiếng Việt</b> (ví dụ <span class="ex">CỘNG</span> ra <span class="ex">C NG</span>).</p>
+            <p>Hai giả thuyết về nguyên nhân:</p>
+            <ul>
+              <li>Tôi đoán: gửi <b>quá nhiều trang một lúc</b> (batch lớn) làm model quá tải.</li>
+              <li>Bạn đoán: do <b>bản thân model</b> dở.</li>
+            </ul>
+            <p><span class="tag t-corr">TEST CÔ LẬP</span> OCR cùng mấy tài liệu đó theo nhiều cách khác nhau:</p>
+            <div class="data">5 trang/lần  ≈  1 trang/lần  ≈  đổi model (qwen3-vl)  →  đều ra chữ ĐỦ DẤU (~0.19)
+Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR lại giờ cũng SẠCH</div>
+            <p><span class="tag t-data">NGUYÊN NHÂN THẬT</span> Không phải batch, cũng không phải model. Là <b>kiến trúc CŨ</b>: pipeline cũ đem OCR <b>tất cả</b> tài liệu — kể cả tài liệu vốn đã có chữ số hoá tốt — và chính việc OCR làm hỏng chúng. Pipeline mới <b>chỉ OCR tài liệu scan thật</b> (loại không có chữ sẵn), nên lỗi tự hết.</p>
+          </div>
+        </div>
+
+        <div class="entry dec">
+          <span class="ph">⑧ Pipeline cuối</span>
+          <h3>Ghép lại &amp; chạy full 35K</h3>
+          <div class="card">
+            <p><span class="tag t-dec">XONG</span> <code>utils.py</code>: bỏ ollama, thêm Surya (nạp 1 lần); <code>extract_text</code> trả <code>(text, route)</code>. <code>main.py</code> xuất <code>{filename, route, full_text}</code>; doc bị bỏ → ghi <code>skipped_legacy.log</code>.</p>
+            <p>Dọn 275 JSON cũ (định dạng cũ) sang <code>data/processed_old_backup/</code>. Validate 3 nhánh OK. Chạy full bằng <code>.venv-surya/bin/python main.py</code> (dừng/tiếp được).</p>
+            <p><span class="tag t-data">CHECK 27 doc đầu</span> định dạng đúng · chất lượng dấu 0.19-0.20 mọi nhánh · 0 full_text rỗng.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <h4 class="sec">Kết quả &amp; cấu hình chốt (cuối Phiên 1)</h4>
+      <div class="kv">
+        <div>Phân bố nhánh</div><div>clean 67% · glued 14% · scanned 17% · legacy/holes ~2% (bỏ)</div>
+        <div>Cắt dính chữ</div><div>từ điển 7184 âm tiết · 0 lỗi · −51% chỗ dính · 7ms/doc · $0</div>
+        <div>OCR scanned</div><div>Surya 0.14.7, GPU M5 · ~9s/trang · ~2-3GB · $0</div>
+        <div>Đầu ra</div><div><code>data/processed/&lt;tên&gt;.json</code> = {filename, route, full_text}</div>
+        <div>Môi trường chạy</div><div><code>.venv-surya</code> (Python 3.12): pymupdf, regex, surya-ocr · KHÔNG cần ollama/cloud</div>
+      </div>
+
+      <h4 class="sec">Bàn giao sang phiên sau — câu hỏi mở</h4>
+      <div class="open">
+        <ul>
+          <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
+          <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
+          <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
+          <li><b>Nhiễu nhỏ đã đo, tạm bỏ qua:</b> footer font VNI ~2% · sai dấu thanh ở tiêu đề (TÒA→TÕA) ~7% — đều ở phần boilerplate, không đụng nội dung.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="session next">
+    <div class="session-head">
+      <span class="snum">PHIÊN 2</span><span class="sdate">— sắp tới —</span>
+      <h2>Embedding &amp; search (dự kiến)</h2>
+      <p class="sgoal"><b>Mục tiêu:</b> chốt model embedding · dựng index pgvector · API tìm kiếm. Bắt đầu bằng việc quyết "60% doc rỗng nội dung vụ án".</p>
+    </div>
+  </section>
+
+  <p class="legend">
+    <span><i style="background:var(--blue)"></i>khảo sát / số liệu</span>
+    <span><i style="background:var(--green)"></i>quyết định</span>
+    <span><i style="background:var(--red)"></i>đính chính (đoán sai → sửa)</span>
+  </p>
+
+</div>
+</body>
+</html>
