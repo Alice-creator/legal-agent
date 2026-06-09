@@ -231,6 +231,28 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           </div>
         </div>
 
+        <div class="entry dec">
+          <span class="ph">⑨ Tối ưu — tách luồng</span>
+          <h3>Producer/consumer: text không chờ scanned</h3>
+          <div class="card">
+            <p><span class="tag t-inv">VẤN ĐỀ</span> Luồng tuần tự: gặp 1 doc scanned (Surya ~9s/trang) là <b>cả luồng đứng chờ</b> → text bị block sau mỗi doc scan.</p>
+            <p><span class="tag t-dec">QUYẾT ĐỊNH</span> Tách: tiến trình chính (CPU) xử lý text + ghi ngay; doc scanned đẩy vào <b>queue</b> cho 1 worker Surya (GPU) chạy <b>song song</b>. Text dùng CPU, OCR dùng GPU → không giành tài nguyên.</p>
+            <p><span class="tag t-corr">ĐÍNH CHÍNH</span> "Nhiều Surya song song" KHÔNG nhanh hơn — 1 GPU thì N worker chỉ tranh nhau. Đòn bẩy là <b>batch lớn</b> (vẫn 1 GPU), không phải nhiều worker.</p>
+            <p><span class="tag t-data">KẾT QUẢ</span> Text 83% ghi xong trong ~vài phút, không bị scanned block; GPU dành trọn cho OCR.</p>
+          </div>
+        </div>
+
+        <div class="entry corr">
+          <span class="ph">⑩ Kiểm chất lượng + dọn rác font</span>
+          <h3>Audit 100 doc &amp; charmap an toàn</h3>
+          <div class="card">
+            <p><span class="tag t-data">AUDIT 100 doc</span> mật độ dấu median 0.197 · 0 doc rỗng · joint dính median 0 → <b>thân bài tốt</b>.</p>
+            <p><span class="tag t-corr">SUÝT LỖI</span> Enumerate ký tự "rác" mới thấy phần lớn là <b>dấu nháy cong hợp lệ</b> (“ ” …) — KHÔNG được map, nếu không sẽ hỏng typography.</p>
+            <p><span class="tag t-corr">ĐÍNH CHÍNH lớn</span> Charmap TCVN3/VNI đầy đủ ở mức <b>văn bản thuần là UNSAFE</b>: byte font cũ ra <code>é ó ù à</code> — vốn CŨNG là chữ VN thật. Không phân biệt được 'é' rác với 'é' đúng ('khoé') → sẽ corrupt. Sửa trọn cần đọc lại PDF + nhận font theo span.</p>
+            <p><span class="tag t-dec">FIX AN TOÀN (đã áp)</span> <code>fix_legacy.py</code> chỉ sửa thứ KHÔNG nhập nhằng: <b>ƣ→ư</b> (16% doc — "đương sự", "thương mại") + gắn lại dấu thanh mồ côi ("Bô ̣"→"Bộ"). Verify: 0 ƣ còn lại.</p>
+          </div>
+        </div>
+
       </div>
 
       <h4 class="sec">Kết quả &amp; cấu hình chốt (cuối Phiên 1)</h4>
@@ -240,6 +262,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>OCR scanned</div><div>Surya 0.14.7, GPU M5 · ~9s/trang · ~2-3GB · $0</div>
         <div>Đầu ra</div><div><code>data/processed/&lt;tên&gt;.json</code> = {filename, route, full_text}</div>
         <div>Môi trường chạy</div><div><code>.venv-surya</code> (Python 3.12): pymupdf, regex, surya-ocr · KHÔNG cần ollama/cloud</div>
+        <div>Luồng chạy</div><div>producer/consumer: text (CPU) + 1 worker Surya (GPU) song song → text không bị scanned block</div>
+        <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16% doc) + dấu thanh mồ côi · an toàn, idempotent</div>
       </div>
 
       <h4 class="sec">Bàn giao sang phiên sau — câu hỏi mở</h4>
@@ -248,7 +272,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
           <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
           <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
-          <li><b>Nhiễu nhỏ đã đo, tạm bỏ qua:</b> footer font VNI ~2% · sai dấu thanh ở tiêu đề (TÒA→TÕA) ~7% — đều ở phần boilerplate, không đụng nội dung.</li>
+          <li><b>Decode font cũ trọn vẹn</b> (~3% doc TCVN3/VNI nặng vẫn còn rác): cần đọc lại PDF + nhận font theo từng span (text-level unsafe), hoặc drop như legacy.</li>
+          <li><b>Nhiễu nhỏ còn lại:</b> sai dấu thanh tiêu đề (TÒA→TÕA) vài% — boilerplate, không đụng nội dung.</li>
         </ul>
       </div>
     </div>
