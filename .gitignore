@@ -1,5 +1,7 @@
 .venv/
 .venv-surya/
+venv/
 data/
+data_parsed/
 .env
 __pycache__/
