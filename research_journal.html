@@ -275,6 +275,16 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           </div>
         </div>
 
+        <div class="entry">
+          <span class="ph">⑬ Vá thẳng từ PDF gốc (2 doc)</span>
+          <h3>Render đúng trang → đọc tận mắt → sửa vùng hỏng, KHÔNG re-OCR cả doc</h3>
+          <div class="card">
+            <p><span class="tag t-corr">PHẢN BIỆN</span> 2 doc còn vết (<code>đ\x00a ch\x00</code> = "địa chỉ" mất dấu; 1 block header font TCVN3) <b>không phải doc hỏng</b> — chúng 99.9% sạch (2.5K &amp; 17.6K ký tự, đúng 1 vùng lỗi). Re-OCR cả doc = đổi text-layer chính xác lấy lỗi OCR mới → <b>hại hơn lợi</b>.</p>
+            <p><span class="tag t-dec">CÁCH ĐÚNG</span> Tìm đúng trang chứa lỗi (424814 tr.2/2 · 166905 tr.8/12), <b>render PNG + đọc tận mắt</b> để lấy ground-truth, rồi vá thẳng vùng đó. Header TCVN3 là boilerplate chuẩn ("biên bản nghị án" + quốc hiệu) → decode chắc chắn, giữ nguyên hoa/thường bản gốc.</p>
+            <p><span class="tag t-dec">CÔNG CỤ</span> <code>fix_verified.py</code>: bảng sửa đích danh từng doc kèm provenance ("render trang X"), idempotent. Sau vá: cả 2 doc legacy=0, NUL=0 → SẠCH 31.904.</p>
+          </div>
+        </div>
+
       </div>
 
       <h4 class="sec">Kết quả &amp; cấu hình chốt (cuối Phiên 1)</h4>
