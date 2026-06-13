@@ -264,6 +264,17 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           </div>
         </div>
 
+        <div class="entry corr">
+          <span class="ph">⑫ Tool detect lỗi toàn corpus</span>
+          <h3>Quét 100% (34.4K doc) thay vì sample — chốt chất lượng &amp; xếp hàng re-OCR</h3>
+          <div class="card">
+            <p><span class="tag t-dec">DỤNG CỤ</span> <code>detect_errors.py</code> quét <b>cả corpus</b> (không sample nữa), phân 3 nhóm: <b>FIXABLE</b> (đáng lẽ ~0) · <b>RE-OCR</b> (defer) · <b>MINOR</b> (legacy trace, giữ). Ghi danh sách doc cần đọc lại ra <code>needs_reocr.txt</code> → tái lập + làm hàng đợi cho phiên sau.</p>
+            <p><span class="tag t-corr">SAMPLE BỎ SÓT</span> Quét toàn bộ bắt được 8 ca random-check trượt: <b>4 doc control char</b> (<code>\x00</code> thế chỗ chữ rụng — "đ\x00a ch\x00:" = "địa chỉ"; <code>\x0b/\x0c</code> lẫn trong vùng rác VNI) + <b>4 doc empty</b> (trích xuất ra mảnh vụn 0–96 ký tự).</p>
+            <p><span class="tag t-dec">VÁ</span> Strip control char (<code>\x00–\x1f</code> trừ <code>\n\t</code>) trong <code>_standardize</code> + <code>fix_legacy</code>. "empty" xếp vào nhóm re-OCR (nội dung nằm trong ảnh, text không cứu được). Sau vá: <b>FIXABLE = 0</b> toàn corpus (pua/tone/ƣ/control).</p>
+            <p><span class="tag t-data">CHỐT</span> 34.404 doc: <b>SẠCH 92%</b> (31.903) · <b>legacy-trace 6%</b> (2.156, giữ — thân dùng được) · <b>re-OCR 1%</b> (345 = empty 4 + legacy nặng 223 + rụng-dấu 122, defer).</p>
+          </div>
+        </div>
+
       </div>
 
       <h4 class="sec">Kết quả &amp; cấu hình chốt (cuối Phiên 1)</h4>
@@ -274,7 +285,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Đầu ra</div><div><code>data/processed/&lt;tên&gt;.json</code> = {filename, route, full_text}</div>
         <div>Môi trường chạy</div><div><code>.venv-surya</code> (Python 3.12): pymupdf, regex, surya-ocr · KHÔNG cần ollama/cloud</div>
         <div>Luồng chạy</div><div>producer/consumer: text (CPU) + 1 worker Surya (GPU) song song → text không bị scanned block</div>
-        <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký (498 doc) · an toàn, idempotent</div>
+        <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký + strip control char · an toàn, idempotent</div>
+        <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus → FIXABLE 0 · sạch 92% · re-OCR queue <code>needs_reocr.txt</code> (345)</div>
         <div>Lọc font cũ</div><div><code>LEGACY_SIG</code> +chữ ký VNI · <code>purge_legacy.py</code> gỡ 65 doc rác-toàn-phần (≥2%), giữ doc lẫn · corpus còn 34.404</div>
       </div>
 
@@ -284,8 +296,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
           <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
           <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
-          <li><b>Decode font cũ trọn vẹn:</b> doc-VNI/TCVN-full đã drop (65). Còn lại: doc LẪN (mẩu rác ở footer/đoạn, ~0.5-2%, đã giữ vì thân dùng được) + doc RỤNG KÝ TỰ ("Đi u"="Điều"). Muốn sạch 100% cần đọc lại PDF + decode per-span.</li>
-          <li><b>Nhiễu nhỏ còn lại:</b> sai dấu thanh tiêu đề (TÒA→TÕA) vài% — boilerplate, không đụng nội dung.</li>
+          <li><b>Re-OCR 345 doc (đã xếp hàng <code>needs_reocr.txt</code>):</b> legacy nặng 223 + rụng-dấu 122 + empty 4. Đọc lại PDF bằng Surya là cách sạch nhất (decode per-span quá rủi ro). Doc LẪN (legacy-trace 6%, footer) thì GIỮ — thân dùng được.</li>
+          <li><b>Nhiễu text sửa được = 0:</b> ƣ, TÒA→TÕA, PUA chữ-ký, control char đều đã quét sạch toàn corpus (xác nhận bằng <code>detect_errors.py</code>).</li>
         </ul>
       </div>
     </div>

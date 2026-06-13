@@ -38,7 +38,10 @@ def fix(text):
     t = _orphan.sub(r"\1\2", t)                      # (2) kéo dấu mồ côi về sát nguyên âm
     for bad, good in _TITLE_TONE.items():            # (3) TÕA->TÒA, HÕA->HÒA (title)
         t = t.replace(bad, good)
-    t = "".join(c for c in t if not (0xe000 <= ord(c) <= 0xf8ff))  # (4) bỏ ký tự PUA (glyph chữ-ký/symbol)
+    # (4) bỏ PUA (glyph chữ-ký/symbol) + control char (\x00 thế chỗ chữ rụng,
+    #     \x0b/\x0c lẫn vùng rác font cũ); giữ \n và \t
+    t = "".join(c for c in t if not (0xe000 <= ord(c) <= 0xf8ff)
+                and not (ord(c) < 0x20 and c not in "\n\t"))
     t = regex.sub(r"\n{3,}", "\n\n", t)              # dọn dòng trống do bỏ block chữ-ký
     return unicodedata.normalize("NFC", t)           # rồi gộp precomposed
 

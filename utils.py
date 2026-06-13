@@ -128,7 +128,10 @@ def _standardize(text):
     trained on natural-case text, so lowercasing tends to hurt, not help.
     """
     text = _split_glued(text)                      # NFC + re-space glued + fix sCramble
-    text = ''.join(c for c in text if not (0xe000 <= ord(c) <= 0xf8ff))  # bỏ ký tự PUA (glyph symbol/chữ-ký)
+    # bỏ ký tự PUA (glyph symbol/chữ-ký) + control char (\x00 thế chỗ chữ rụng,
+    # \x0b/\x0c lẫn trong vùng rác font cũ) — giữ \n (0x0a) và \t (0x09)
+    text = ''.join(c for c in text if not (0xe000 <= ord(c) <= 0xf8ff)
+                   and not (ord(c) < 0x20 and c not in '\n\t'))
     text = regex.sub(r'[‐-―−﹘﹣－]', '-', text)  # dashes -> '-'
     text = regex.sub(r'[ \t]+', ' ', text)         # collapse runs of spaces/tabs
     text = regex.sub(r' *\n *', '\n', text)        # trim spaces around newlines
