@@ -14,7 +14,9 @@ SECTION_PATTERN = re.compile(
 # --- Classification signals (validated on this dataset) ---
 # Legacy Vietnamese font (TCVN3/VNI) with no ToUnicode map: PyMuPDF reads the raw
 # bytes as Latin-1, so chars are wrong at the source (ò->ß, â->©, đ->®, Đ->§, ...).
-LEGACY_SIG = regex.compile(r'[ß©®¸ÖÜñ×¨÷¬µ\xad]')
+# Signature = Latin-1 chars that NEVER occur in valid Vietnamese (so safe to flag):
+#   TCVN3: ß © ® ¸ Ö Ü ñ × ¨ ÷ ¬ µ        VNI: ø Ø ï Ï î ö ä Ä å Å Ñ Ð ð Æ æ Ç ç Û û ë Þ þ
+LEGACY_SIG = regex.compile(r'[ß©®¸ÖÜñ×¨÷¬µ\xadøØïÏîöäÄåÅÑÐðÆæÇçÛûëÞþ]')
 # A lowercase letter immediately followed by UPPERCASE = a swallowed space ('phốHồ').
 GLUE = regex.compile(r'\p{Ll}\p{Lu}')
 # A long all-caps run = glued header ('CHỦNGHĨA', 'PHỐHỒCHÍ'). High enough to clear
