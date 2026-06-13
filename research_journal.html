@@ -286,6 +286,17 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           </div>
         </div>
 
+        <div class="entry">
+          <span class="ph">⑭ Decode font cũ TCVN3 — $0, KHÔNG GPU</span>
+          <h3>Rác font cũ là byte còn nguyên → ánh xạ lại charmap, re-OCR là sai công cụ</h3>
+          <div class="card">
+            <p><span class="tag t-data">PHÁT HIỆN</span> 0/939 doc boilerplate có lỗ rụng-chữ (<code>\x00</code>/<code>�</code>) → rác chỉ là <b>byte còn nguyên, sai font</b> (PyMuPDF đọc byte TCVN3 không ToUnicode → hiện CP1252). TCVN3 là map 1:1 → <b>decode ngược $0, không cần OCR</b>.</p>
+            <p><span class="tag t-corr">ĐÍNH CHÍNH cách làm</span> Suy bảng tự động bằng từ điển âm tiết <b>THẤT BẠI</b> (dict không phân biệt "đàn" vs "đơn" → sụp về â/á phổ biến). Cách đúng: <b>căn chỉnh theo codepoint</b> dòng rác với boilerplate đã biết ("Toµ ¸n nh©n d©n"≡"Toà án nhân dân", 1:1) → ra map chắc chắn; phần còn lại lấy từ context residual. Bắt được 2 bẫy: <code>f j w z</code> là <b>tên ẩn danh</b> (không map), <code>ư</code> là soft-hyphen U+00AD (không phải '-').</p>
+            <p><span class="tag t-dec">AN TOÀN</span> <code>legacy_decode.py</code> decode THEO DÒNG, 2 lớp gác: (1) chỉ kích hoạt dòng có glyph RIÊNG-TCVN3 (µ¸©®§… — dòng VNI/sạch không có) → tránh đụng VNI; (2) chỉ giữ nếu validity âm tiết ≥60%. Kiểm <b>0 regression</b> trên toàn corpus.</p>
+            <p><span class="tag t-data">KẾT QUẢ</span> 1.444 doc · 6.299 dòng decode · giải cứu <b>919 doc</b> ($0). SẠCH 92%→<b>95%</b> (32.823) · re-OCR 1.561→<b>1.005</b>. Phần sót chủ yếu là <b>VNI</b> (tách âm tiết theo space — charmap không cứu được) → để re-OCR theo trang.</p>
+          </div>
+        </div>
+
       </div>
 
       <h4 class="sec">Kết quả &amp; cấu hình chốt (cuối Phiên 1)</h4>
@@ -297,7 +308,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Môi trường chạy</div><div><code>.venv-surya</code> (Python 3.12): pymupdf, regex, surya-ocr · KHÔNG cần ollama/cloud</div>
         <div>Luồng chạy</div><div>producer/consumer: text (CPU) + 1 worker Surya (GPU) song song → text không bị scanned block</div>
         <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký + strip control char · an toàn, idempotent</div>
-        <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus (phân loại theo VỊ TRÍ garble) → FIXABLE 0 · sạch 92% · re-OCR queue <code>needs_reocr.txt</code> (1.561)</div>
+        <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus (phân loại theo VỊ TRÍ garble) → FIXABLE 0 · re-OCR queue <code>needs_reocr.txt</code></div>
+        <div>Decode font cũ</div><div><code>legacy_decode.py</code>: charmap TCVN3 (căn-chỉnh-boilerplate) + gác cổng âm tiết · giải cứu 919 doc · $0 không GPU · <b>sạch 95%</b> (32.823)</div>
         <div>Lọc font cũ</div><div><code>LEGACY_SIG</code> +chữ ký VNI · <code>purge_legacy.py</code> gỡ 65 doc rác-toàn-phần (≥2%), giữ doc lẫn · corpus còn 34.404</div>
       </div>
 
@@ -307,7 +319,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
           <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
           <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
-          <li><b>Re-OCR 1.561 doc (đã xếp hàng <code>needs_reocr.txt</code>):</b> legacy nặng 223 + rụng-dấu 122 + empty 4 + <b>body-garble 1.230</b> (font cũ lẫn thân). Đa số là doc LẪN: thân Unicode sạch + 1 trang/vùng font cũ → cách đúng là <b>re-OCR theo TRANG</b> (chỉ trang dính lỗi, splice lại), KHÔNG re-OCR cả doc. Doc garble chỉ ở letterhead/chữ ký (939) thì GIỮ — boilerplate.</li>
+          <li><b>Re-OCR 1.005 doc (đã xếp hàng <code>needs_reocr.txt</code>):</b> sau khi <code>legacy_decode.py</code> dọn sạch TCVN3 ($0), phần sót chủ yếu là <b>VNI</b> (legacy_body 761 + legacy nặng 126 + rụng-dấu 122 + empty 4) — VNI tách âm tiết theo space nên charmap không cứu được. Cách đúng: <b>re-OCR theo TRANG</b> (chỉ trang dính lỗi, splice lại; median 1 trang/doc), KHÔNG re-OCR cả doc.</li>
           <li><b>Nhiễu text sửa được = 0:</b> ƣ, TÒA→TÕA, PUA chữ-ký, control char đều đã quét sạch toàn corpus (xác nhận bằng <code>detect_errors.py</code>).</li>
         </ul>
       </div>
