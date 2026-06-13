@@ -6,8 +6,9 @@ re-OCR. Phân 3 nhóm:
   FIXABLE   — đáng lẽ ~0 sau các fix đã làm (nếu >0 là còn sót, cần xử lý):
               empty · pua · tone_swap(TÕA/HÕA) · guoc(ƣ) · glyph_bad(U+FFFD/control)
   RE-OCR    — cần đọc lại bằng Surya (font cũ / rụng chữ), defer:
-              legacy_char (mật độ ký tự font cũ ≥ ngưỡng) · low_density
-  MINOR     — giữ lại: legacy trace (vài ký tự font cũ ở footer, thân vẫn dùng được)
+              empty · legacy_char (mật độ font cũ cao) · low_density ·
+              legacy_body (font cũ lẫn trong THÂN án — nội dung có giá trị bị hỏng)
+  MINOR     — giữ lại: legacy chỉ ở letterhead/chữ ký (boilerplate; thân Unicode sạch)
 
 Dùng:
     python detect_errors.py            # báo cáo
@@ -53,7 +54,18 @@ def detect(ft):
     if diacritic_density < LOW_DENSITY:
         reocr.add("low_density")
 
-    legacy_trace = 0 < legacy_density < LEGACY_HEAVY
+    # Mật độ legacy thấp KHÔNG có nghĩa vô hại: doc lẫn mã hoá (thân Unicode sạch
+    # + 1 vùng font cũ). Phân theo VỊ TRÍ garble, không theo mật độ:
+    #   - chỉ ở letterhead (12% đầu) / chữ ký (8% cuối) = boilerplate → giữ (trace)
+    #   - lẫn trong thân (12-92%) = nội dung có giá trị bị hỏng → cần re-OCR
+    legacy_trace = False
+    if 0 < legacy_density < LEGACY_HEAVY:
+        in_body = any(0.12 <= m.start() / n <= 0.92
+                      for m in utils.LEGACY_SIG.finditer(s))
+        if in_body:
+            reocr.add("legacy_body")
+        else:
+            legacy_trace = True
     return fix, reocr, legacy_trace
 
 
@@ -88,10 +100,10 @@ def main(write_list=False):
     for e in ("pua", "tone_swap", "guoc", "glyph_bad"):
         print(f"  {e:12} {fix_c[e]}")
     print("\nRE-OCR (defer — cần Surya đọc lại):")
-    for e in ("empty", "legacy_char", "low_density"):
+    for e in ("empty", "legacy_char", "low_density", "legacy_body"):
         print(f"  {e:12} {reocr_c[e]}")
     print(f"  → tổng doc cần re-OCR: {len(reocr_files)} ({len(reocr_files)*100//n}%)")
-    print(f"\nMINOR (legacy trace ở footer, giữ): {trace}")
+    print(f"\nMINOR (legacy chỉ ở letterhead/chữ ký, giữ): {trace}")
     print(f"SẠCH hoàn toàn: {clean} ({clean*100//n}%)")
 
     if write_list:

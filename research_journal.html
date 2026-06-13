@@ -271,7 +271,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
             <p><span class="tag t-dec">DỤNG CỤ</span> <code>detect_errors.py</code> quét <b>cả corpus</b> (không sample nữa), phân 3 nhóm: <b>FIXABLE</b> (đáng lẽ ~0) · <b>RE-OCR</b> (defer) · <b>MINOR</b> (legacy trace, giữ). Ghi danh sách doc cần đọc lại ra <code>needs_reocr.txt</code> → tái lập + làm hàng đợi cho phiên sau.</p>
             <p><span class="tag t-corr">SAMPLE BỎ SÓT</span> Quét toàn bộ bắt được 8 ca random-check trượt: <b>4 doc control char</b> (<code>\x00</code> thế chỗ chữ rụng — "đ\x00a ch\x00:" = "địa chỉ"; <code>\x0b/\x0c</code> lẫn trong vùng rác VNI) + <b>4 doc empty</b> (trích xuất ra mảnh vụn 0–96 ký tự).</p>
             <p><span class="tag t-dec">VÁ</span> Strip control char (<code>\x00–\x1f</code> trừ <code>\n\t</code>) trong <code>_standardize</code> + <code>fix_legacy</code>. "empty" xếp vào nhóm re-OCR (nội dung nằm trong ảnh, text không cứu được). Sau vá: <b>FIXABLE = 0</b> toàn corpus (pua/tone/ƣ/control).</p>
-            <p><span class="tag t-data">CHỐT</span> 34.404 doc: <b>SẠCH 92%</b> (31.903) · <b>legacy-trace 6%</b> (2.156, giữ — thân dùng được) · <b>re-OCR 1%</b> (345 = empty 4 + legacy nặng 223 + rụng-dấu 122, defer).</p>
+            <p><span class="tag t-corr">ĐÍNH CHÍNH (soi kỹ nhóm "trace")</span> Phân theo MẬT ĐỘ là sai — "trace" KHÔNG đồng nghĩa vô hại. <b>1.230/2.155 doc</b> "trace" có font cũ lẫn trong <b>THÂN án</b> (căn cứ pháp lý "Áp dụng khoản 1 Điều 30", điều khoản hiệu lực, phần Quyết định...) — chữ có giá trị bị hỏng, đúng thứ thẩm phán search. Phân lại theo <b>VỊ TRÍ</b>: garble chỉ ở letterhead/chữ ký → giữ; lẫn thân → đẩy vào queue re-OCR.</p>
+            <p><span class="tag t-data">CHỐT (sau đính chính)</span> 34.404 doc: <b>SẠCH 92%</b> (31.904) · <b>MINOR 3%</b> (939 — legacy chỉ ở letterhead/chữ ký, giữ) · <b>re-OCR 4%</b> (1.561 = empty 4 + legacy nặng 223 + rụng-dấu 122 + body-garble 1.230, defer).</p>
           </div>
         </div>
 
@@ -296,7 +297,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Môi trường chạy</div><div><code>.venv-surya</code> (Python 3.12): pymupdf, regex, surya-ocr · KHÔNG cần ollama/cloud</div>
         <div>Luồng chạy</div><div>producer/consumer: text (CPU) + 1 worker Surya (GPU) song song → text không bị scanned block</div>
         <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký + strip control char · an toàn, idempotent</div>
-        <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus → FIXABLE 0 · sạch 92% · re-OCR queue <code>needs_reocr.txt</code> (345)</div>
+        <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus (phân loại theo VỊ TRÍ garble) → FIXABLE 0 · sạch 92% · re-OCR queue <code>needs_reocr.txt</code> (1.561)</div>
         <div>Lọc font cũ</div><div><code>LEGACY_SIG</code> +chữ ký VNI · <code>purge_legacy.py</code> gỡ 65 doc rác-toàn-phần (≥2%), giữ doc lẫn · corpus còn 34.404</div>
       </div>
 
@@ -306,7 +307,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
           <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
           <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
-          <li><b>Re-OCR 345 doc (đã xếp hàng <code>needs_reocr.txt</code>):</b> legacy nặng 223 + rụng-dấu 122 + empty 4. Đọc lại PDF bằng Surya là cách sạch nhất (decode per-span quá rủi ro). Doc LẪN (legacy-trace 6%, footer) thì GIỮ — thân dùng được.</li>
+          <li><b>Re-OCR 1.561 doc (đã xếp hàng <code>needs_reocr.txt</code>):</b> legacy nặng 223 + rụng-dấu 122 + empty 4 + <b>body-garble 1.230</b> (font cũ lẫn thân). Đa số là doc LẪN: thân Unicode sạch + 1 trang/vùng font cũ → cách đúng là <b>re-OCR theo TRANG</b> (chỉ trang dính lỗi, splice lại), KHÔNG re-OCR cả doc. Doc garble chỉ ở letterhead/chữ ký (939) thì GIỮ — boilerplate.</li>
           <li><b>Nhiễu text sửa được = 0:</b> ƣ, TÒA→TÕA, PUA chữ-ký, control char đều đã quét sạch toàn corpus (xác nhận bằng <code>detect_errors.py</code>).</li>
         </ul>
       </div>
