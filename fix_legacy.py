@@ -27,9 +27,19 @@ _COMBINING = "̣̀́̃̉"
 _orphan = regex.compile(r"(\S) +([" + _COMBINING + r"])")   # ký tự + space(s) + dấu mồ côi
 
 
+# (3) Lỗi cmap font tiêu đề: glyph "ò" map nhầm sang codepoint "õ" (chỉ ở tiêu đề
+# in hoa). CHỈ thay đúng chuỗi không-bao-giờ-hợp-lệ; KHÔNG blanket õ->ò vì 'õ' là chữ
+# tiếng Việt thật ('ngõ', 'võ', 'rõ').
+_TITLE_TONE = {"TÕA": "TÒA", "HÕA": "HÒA", "Tõa": "Tòa", "Hõa": "Hòa"}
+
+
 def fix(text):
     t = text.replace("ƣ", "ư").replace("Ƣ", "Ư")   # (1) ƣ luôn là ư
     t = _orphan.sub(r"\1\2", t)                      # (2) kéo dấu mồ côi về sát nguyên âm
+    for bad, good in _TITLE_TONE.items():            # (3) TÕA->TÒA, HÕA->HÒA (title)
+        t = t.replace(bad, good)
+    t = "".join(c for c in t if not (0xe000 <= ord(c) <= 0xf8ff))  # (4) bỏ ký tự PUA (glyph chữ-ký/symbol)
+    t = regex.sub(r"\n{3,}", "\n\n", t)              # dọn dòng trống do bỏ block chữ-ký
     return unicodedata.normalize("NFC", t)           # rồi gộp precomposed
 
 

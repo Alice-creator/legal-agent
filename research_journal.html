@@ -274,7 +274,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Đầu ra</div><div><code>data/processed/&lt;tên&gt;.json</code> = {filename, route, full_text}</div>
         <div>Môi trường chạy</div><div><code>.venv-surya</code> (Python 3.12): pymupdf, regex, surya-ocr · KHÔNG cần ollama/cloud</div>
         <div>Luồng chạy</div><div>producer/consumer: text (CPU) + 1 worker Surya (GPU) song song → text không bị scanned block</div>
-        <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16% doc) + dấu thanh mồ côi · an toàn, idempotent</div>
+        <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký (498 doc) · an toàn, idempotent</div>
         <div>Lọc font cũ</div><div><code>LEGACY_SIG</code> +chữ ký VNI · <code>purge_legacy.py</code> gỡ 65 doc rác-toàn-phần (≥2%), giữ doc lẫn · corpus còn 34.404</div>
       </div>
 
