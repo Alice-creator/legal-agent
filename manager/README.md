@@ -5,10 +5,28 @@ lượng · sửa/xử-lý-lại. Stack: **PostgreSQL (Docker) + FastAPI + React
 
 ## Tiến độ
 - [x] **P0** — Postgres (Docker) + schema + ingest 34k (kèm phân loại chất lượng)
-- [ ] P1 — Backend API (stats/list/detail/search)
-- [ ] P2 — Frontend (dashboard/list/detail + PDF đối chiếu)
-- [ ] P3 — Ghi (sửa/reprocess/xoá)
-- [ ] P4 — Đánh bóng
+- [x] **P1** — Backend FastAPI (stats/list/detail/search/pdf + sửa/reprocess/xoá)
+- [x] **P2** — Frontend React/Vite (dashboard/list/detail + PDF đối chiếu)
+- [x] **P3** — Ghi (sửa tay · decode lại $0 · xoá) — gộp vào P1/P2
+- [ ] P4 — Đánh bóng (highlight rác, export, re-OCR qua UI…)
+
+## Chạy app (3 bước, 2 terminal)
+
+```bash
+# 0. Postgres (nếu chưa chạy) — chỉ cần 1 lần
+docker compose -f manager/docker-compose.yml up -d
+#    (lần đầu setup DB: docker exec -i legal_db psql -U legal -d legal < manager/schema.sql
+#                       && .venv-surya/bin/python manager/ingest.py)
+
+# 1. Backend (terminal 1, từ repo root)
+.venv-surya/bin/uvicorn manager.backend.main:app --reload --port 8000
+
+# 2. Frontend (terminal 2)
+npm --prefix manager/frontend install      # chỉ lần đầu
+npm --prefix manager/frontend run dev
+```
+
+Mở **http://localhost:5173** → Bảng chất lượng / Tài liệu (lọc + tìm + xem PDF đối chiếu + sửa/decode/xoá).
 
 ## Chạy P0
 
