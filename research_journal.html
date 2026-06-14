@@ -90,9 +90,10 @@
 .venv-surya/bin/python purge_legacy.py --apply # 3. gỡ doc rác-TOÀN-PHẦN (density ≥2%) khỏi processed
 .venv-surya/bin/python detect_errors.py --list # 4. audit 100% corpus + ghi hàng đợi needs_reocr.txt
 .venv-surya/bin/python legacy_decode.py --apply# 5. decode font cũ TCVN3 → Unicode ($0, KHÔNG GPU)
-.venv-surya/bin/python reocr.py --apply        # 6. re-OCR THEO TRANG cho doc còn rác (VNI/rụng chữ)
-.venv-surya/bin/python fix_legacy.py --apply   # 7. dọn lại ƣ do Surya đẻ ra khi OCR
-.venv-surya/bin/python detect_errors.py        # 8. verify: FIXABLE phải = 0</div>
+.venv-surya/bin/python vni_decode.py --apply   # 6. decode font cũ VNI → Unicode ($0, KHÔNG GPU)
+.venv-surya/bin/python reocr.py --apply        # 7. re-OCR THEO TRANG phần còn lại (VNI tách-space/rụng chữ)
+.venv-surya/bin/python fix_legacy.py --apply   # 8. dọn lại ƣ do Surya đẻ ra khi OCR
+.venv-surya/bin/python detect_errors.py        # 9. verify: FIXABLE phải = 0</div>
 
     <p><b>④ Quyết định then chốt &amp; VÌ SAO (cốt lõi của nghiên cứu):</b></p>
     <ul>
@@ -357,7 +358,18 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
             <p><span class="tag t-dec">CÔNG CỤ</span> <code>reocr.py</code> tái dùng gần hết utils (<code>_surya</code>, render pixmap, <code>_strip_page_num</code>, <code>_standardize</code>); chỉ thêm routing-theo-trang + dựng lại full_text từ PDF gốc. Resumable qua <code>reocr_done.log</code>. Chạy queue 1.005 doc: OCR <b>2.226 trang (18%)</b> ở 495 doc; 510 doc "đi qua" 0 trang.</p>
             <p><span class="tag t-data">CHẤT LƯỢNG OCR: tốt</b></span> Letterhead/thân từng rác giờ ra tiếng Việt sạch (verify tay). Nhưng OCR tự đẻ <code>ƣ</code> ở 117 doc → dọn bằng <code>fix_legacy</code> (ƣ→ư).</p>
             <p><span class="tag t-corr">ROI KHIÊM TỐN — nói thẳng</span> SẠCH chỉ <b>+116</b> (32.823→32.939), queue 1.005→<b>856</b>. Vì: (1) 510 doc là passthrough 0 trang (sparse/low-density/empty); (2) <b>182 doc còn residual</b> 4-10/11+ ký tự — rác <b>rải mỏng</b> nhiều trang, mỗi trang dưới ngưỡng <code>0.005</code> nên không trang nào được OCR. Ngưỡng cố định là công cụ cùn.</p>
-            <p><span class="tag t-dec">DỪNG (diminishing returns)</span> 856 doc còn lại chủ yếu là residual lẻ + boilerplate — thực tế đã dùng được cho search. Pass-2 hạ ngưỡng sẽ tốn GPU + rủi ro OCR-nhầm trang gần-sạch. Chốt Phiên 1 ở đây.</p>
+            <p><span class="tag t-dec">DỪNG (diminishing returns)</span> 856 doc còn lại chủ yếu là residual lẻ + boilerplate — thực tế đã dùng được cho search. Pass-2 hạ ngưỡng sẽ tốn GPU + rủi ro OCR-nhầm trang gần-sạch.</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">⑯ Decode font cũ VNI — đánh bóng nốt ($0)</span>
+          <h3>Mở rộng charmap sang VNI: digraph base+dấu, $0 không GPU</h3>
+          <div class="card">
+            <p><span class="tag t-data">PHÁT HIỆN</span> Nhóm còn lại phần lớn là <b>VNI</b>, mà VNI cũng là byte còn nguyên — chỉ là <b>2-byte</b> (nguyên âm + glyph-dấu: <code>oä</code>→ộ, <code>aõ</code>→ã, <code>öï</code>→ự, <code>ñ</code>→đ). Decode được như TCVN3, $0.</p>
+            <p><span class="tag t-dec">CÁCH</span> Độ dài lệch (VNI nhiều byte) nên không căn 1:1 — dùng <b>difflib align</b> boilerplate (<code>"Ñoäc laäp"≡"Độc lập"</code>) rút luật, rồi <b>dựng map systematic</b> bằng tổ hợp (5 dấu × nguyên âm thường / mũ / móc). <code>vni_decode.py</code>, decode greedy digraph trước.</p>
+            <p><span class="tag t-corr">BẪY (đã chặn)</span> <code>ô</code>→ơ đơn lẻ phá chữ thật ("c<b>ô</b>ng ty"→"cơng") trên dòng lẫn — y hệt é/ó của TCVN3. Vá: digraph (base+dấu) luôn an toàn (không có trong chữ sạch); chỉ <code>ô</code> đơn lẻ mới density-gate. VNI tách-space ("quy e àn") không decode → gác cổng loại, để re-OCR.</p>
+            <p><span class="tag t-data">KẾT QUẢ</span> 464 doc · 1.202 dòng · <b>0 regression</b> · giải cứu <b>+286 doc</b> ($0). SẠCH 95,7%→<b>96,6%</b> (33.225) · minor 609→498 · re-OCR 856→681.</p>
           </div>
         </div>
 
@@ -374,7 +386,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký + strip control char · an toàn, idempotent</div>
         <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus (phân loại theo VỊ TRÍ garble) → FIXABLE 0 · re-OCR queue <code>needs_reocr.txt</code></div>
         <div>Decode font cũ</div><div><code>legacy_decode.py</code>: charmap TCVN3 (căn-chỉnh-boilerplate) + gác cổng âm tiết · giải cứu 919 doc · $0 không GPU</div>
-        <div>Re-OCR theo trang</div><div><code>reocr.py</code>: OCR đúng trang dính lỗi (reuse Surya) · 2.226 trang/495 doc · <b>sạch 32.939 (95,7%)</b> · 856 doc residual để lại</div>
+        <div>Re-OCR theo trang</div><div><code>reocr.py</code>: OCR đúng trang dính lỗi (reuse Surya) · 2.226 trang/495 doc</div>
+        <div>Decode VNI</div><div><code>vni_decode.py</code>: charmap digraph VNI + density-gate · +286 doc · $0 không GPU · <b>sạch 33.225 (96,6%)</b> · còn 681 re-OCR + 498 minor</div>
         <div>Lọc font cũ</div><div><code>LEGACY_SIG</code> +chữ ký VNI · <code>purge_legacy.py</code> gỡ 65 doc rác-toàn-phần (≥2%), giữ doc lẫn · corpus còn 34.404</div>
       </div>
 
@@ -384,7 +397,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
           <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
           <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
-          <li><b>Re-OCR ĐÃ CHẠY (<code>reocr.py</code>):</b> 495 doc/2.226 trang OCR xong → sạch 32.939 (95,7%). Còn <b>856 doc residual</b> defer: rác rải mỏng dưới ngưỡng trang (182), low-density rụng-chữ (120), boilerplate (606 minor), empty (4). Đều đã usable cho search — pass-2 hạ ngưỡng là diminishing returns.</li>
+          <li><b>Đã làm sạch tới 96,6%</b> (33.225): re-OCR trang (<code>reocr.py</code>) + decode VNI (<code>vni_decode.py</code>). Còn <b>681 doc re-OCR</b> defer (legacy_body rải mỏng 572 + low-density rụng-chữ 120 + lẻ) + <b>498 minor</b> boilerplate — đều usable cho search. Phần này là VNI tách-space + rụng-chữ thật, hết đường charmap; muốn hết phải re-OCR pass-2 hạ ngưỡng (diminishing returns).</li>
           <li><b>Rụng ký tự (low_density):</b> ~120 doc mất hẳn glyph trong text-layer ("phần"→"phn") — không có legacy để bắt, detector trang dựa-legacy bỏ sót. Cần tín hiệu mật-độ-dấu-thấp-theo-trang nếu muốn cứu (rủi ro OCR-nhầm trang nhiều-số).</li>
           <li><b>Nhiễu text sửa được = 0:</b> ƣ, TÒA→TÕA, PUA chữ-ký, control char đều đã quét sạch toàn corpus (xác nhận bằng <code>detect_errors.py</code>).</li>
         </ul>

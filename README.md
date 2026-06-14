@@ -28,8 +28,8 @@ Mỗi doc được định tuyến theo cách rẻ-nhất-đáng-tin:
 
 Doc font cũ (TCVN3/VNI) được dọn thêm sau trích xuất — xem scripts.
 
-**Trạng thái corpus:** 34.404 doc · **sạch 95,7%** (32.939) · 609 minor (rác chỉ ở
-quốc hiệu/chữ ký, vẫn dùng được) · 856 doc residual để re-OCR sau.
+**Trạng thái corpus:** 34.404 doc · **sạch 96,6%** (33.225) · 498 minor (rác chỉ ở
+quốc hiệu/chữ ký, vẫn dùng được) · 681 doc residual để re-OCR sau.
 
 ## Scripts
 
@@ -39,6 +39,7 @@ quốc hiệu/chữ ký, vẫn dùng được) · 856 doc residual để re-OCR 
 | `utils.py` | Lõi: routing, trích xuất, tách âm tiết, OCR Surya, chuẩn hoá |
 | `detect_errors.py` | Quét 100% corpus, phân loại lỗi theo vị trí, ghi hàng đợi `needs_reocr.txt` |
 | `legacy_decode.py` | Decode font cũ TCVN3 → Unicode bằng charmap ($0, không GPU) |
+| `vni_decode.py` | Decode font cũ VNI → Unicode (digraph base+dấu, $0, không GPU) |
 | `reocr.py` | Re-OCR **theo trang** cho doc còn rác (VNI/rụng chữ); reuse Surya |
 | `fix_legacy.py` | Sửa rác an toàn: ƣ→ư, dấu thanh mồ côi, PUA, control char |
 | `fix_verified.py` | Sửa đích danh từng doc, đã xác minh tận trang PDF |
