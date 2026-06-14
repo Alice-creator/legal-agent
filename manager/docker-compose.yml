@@ -1,0 +1,25 @@
+# Postgres cho phần mềm quản lý corpus. Dùng image pgvector để Phiên 2 (embedding)
+# bật pgvector luôn được, không phải đổi image. unaccent + pg_trgm là contrib có sẵn.
+# Host map cổng 5433 (5432 đã bị 1 Postgres khác chiếm). Data nằm trong named volume
+# (Docker quản lý, KHÔNG trong repo).
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: legal_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: legal
+      POSTGRES_USER: legal
+      POSTGRES_PASSWORD: legal
+    ports:
+      - "5433:5432"
+    volumes:
+      - legal_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legal -d legal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  legal_pgdata:
