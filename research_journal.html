@@ -66,6 +66,59 @@
   <h1>Legal Agent</h1>
   <p class="project"><b>Dự án:</b> hỗ trợ <b>hội đồng xét xử</b> — khi chuẩn bị tuyên án, tra cứu các vụ đã xử trước đó có nội dung tương tự để tham khảo (hướng tới nhất quán giữa các bản án). Kho tra cứu = <b>35.000 bản án Toà án VN</b> để model truy vấn.</p>
 
+  <div style="background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:8px;padding:6px 18px 14px;margin:0 0 28px">
+    <h4 class="sec" style="margin-top:16px">🔁 Tái lập nghiên cứu này (đọc trước — cho Claude/người kế nhiệm)</h4>
+    <p style="margin-top:0">Mục này đủ để dựng lại Phiên 1 từ đầu. Đọc nó trước khi đụng vào bất cứ thứ gì.</p>
+
+    <p><b>① Ràng buộc BẤT BIẾN (phá là sai hướng):</b></p>
+    <ul>
+      <li><b>100% LOCAL, $0</b> — không gọi cloud API. (Đã thử cloud, bỏ — xem ngõ cụt.)</li>
+      <li><b>PDF gốc READ-ONLY</b> — chỉ sửa JSON trong <code>data/processed/</code>, TUYỆT ĐỐI không đụng file PDF.</li>
+      <li><b>Không cài gì lên máy</b> — mọi dependency nằm trong venv <code>.venv-surya</code>.</li>
+      <li><b>GIỮ hoa/thường</b> — không lowercase (model embedding multilingual-e5 case-sensitive).</li>
+      <li>Bỏ doc không cứu được thì <b>ghi log</b>, không bỏ im (xem <code>skipped_legacy.log</code>).</li>
+    </ul>
+
+    <p><b>② Môi trường:</b> Apple M5 · 32GB unified (~25GB GPU Metal/MPS). venv <code>.venv-surya</code> (Python 3.12):
+      <code>surya-ocr==0.14.7</code> (KHÔNG 0.20 — bản mới cần binary llama.cpp = cài máy), <code>pymupdf</code>, <code>regex</code>.
+      Input: <code>data/legal-data/*.pdf</code> (~35.089). Output: <code>data/processed/*.json</code> = <code>{filename, route, full_text}</code>.
+      Từ điển âm tiết: <code>data/vi_syllables.txt</code> (7184 âm, từ hieuthi).</p>
+
+    <p><b>③ Runbook — chạy đúng thứ tự (đều idempotent / resumable):</b></p>
+    <div class="data">.venv-surya/bin/python main.py            # 1. trích xuất: clean/glued→PyMuPDF, scanned→Surya, legacy/holes→bỏ+log
+.venv-surya/bin/python fix_legacy.py --apply   # 2. dọn rác AN TOÀN: ƣ→ư, dấu thanh mồ côi, bỏ PUA + control char
+.venv-surya/bin/python purge_legacy.py --apply # 3. gỡ doc rác-TOÀN-PHẦN (density ≥2%) khỏi processed
+.venv-surya/bin/python detect_errors.py --list # 4. audit 100% corpus + ghi hàng đợi needs_reocr.txt
+.venv-surya/bin/python legacy_decode.py --apply# 5. decode font cũ TCVN3 → Unicode ($0, KHÔNG GPU)
+.venv-surya/bin/python reocr.py --apply        # 6. re-OCR THEO TRANG cho doc còn rác (VNI/rụng chữ)
+.venv-surya/bin/python fix_legacy.py --apply   # 7. dọn lại ƣ do Surya đẻ ra khi OCR
+.venv-surya/bin/python detect_errors.py        # 8. verify: FIXABLE phải = 0</div>
+
+    <p><b>④ Quyết định then chốt &amp; VÌ SAO (cốt lõi của nghiên cứu):</b></p>
+    <ul>
+      <li><b>Charmap TCVN3 TRƯỚC, OCR SAU.</b> Rác font cũ là <i>byte còn nguyên, sai font</i> (0 lỗ rụng chữ) → decode ngược $0; chỉ OCR phần không decode được. Đảo thứ tự = đốt GPU vô ích.</li>
+      <li><b>KHÔNG blanket-charmap.</b> Byte font cũ ánh xạ ra <code>é ó à</code> — vốn CŨNG là chữ Việt thật. Blanket sẽ corrupt chữ đúng. Phải decode THEO DÒNG + gác cổng (chỉ kích hoạt glyph riêng-TCVN3; chỉ giữ nếu validity âm tiết tăng).</li>
+      <li><b>Suy bảng charmap = CĂN CHỈNH boilerplate</b>, KHÔNG tự-suy bằng dict (dict không phân biệt "đàn"/"đơn"). TCVN3 là 1:1 nên <code>"Toµ ¸n nh©n d©n"≡"Toà án nhân dân"</code> căn theo codepoint ra map chắc chắn.</li>
+      <li><b>VNI ≠ TCVN3.</b> VNI tách âm tiết theo space ("Đi e à u"="Điều") → charmap 1:1 KHÔNG cứu được → để re-OCR.</li>
+      <li><b>Re-OCR THEO TRANG, không cả doc.</b> Doc lẫn: đa số trang text-layer chuẩn; OCR cả doc = đổi text chính xác lấy lỗi OCR mới (net âm).</li>
+      <li><b>Phân loại lỗi theo VỊ TRÍ, không theo mật độ.</b> Rác ở thân án (căn cứ pháp lý…) đáng cứu; rác ở quốc hiệu/chữ ký (boilerplate) thì giữ.</li>
+    </ul>
+
+    <div class="open">
+      <p style="margin-top:0"><b>⑤ Ngõ cụt ĐÃ THỬ — đừng lặp lại:</b></p>
+      <ul style="margin-bottom:0">
+        <li><b>Cloud (gemma/Gemini VLM):</b> chậm (~59s/trang local, hoặc tốn tiền + lỗi 401 key) → bỏ, dùng Surya local.</li>
+        <li><b>surya-ocr 0.20:</b> cần binary llama.cpp = cài máy → pin <code>0.14.7</code> (PyTorch/MPS thuần).</li>
+        <li><b>Tự-suy charmap bằng từ điển:</b> sụp về â/á phổ biến (sai) → phải căn-chỉnh-boilerplate.</li>
+        <li><b>Nới gác cổng decode (≥ thay vì &gt;):</b> phá tên thật ("VÕ"→"Vế") + mangle VNI → giữ gác cổng chặt.</li>
+        <li><b>Ngưỡng OCR-trang cố định (0.005):</b> bỏ sót rác rải mỏng nhiều trang — hạn chế đã biết, chấp nhận.</li>
+        <li><b>Sample-audit lặp đi lặp lại:</b> bỏ sót lỗi → luôn quét 100% bằng <code>detect_errors.py</code>.</li>
+      </ul>
+    </div>
+
+    <p style="margin-bottom:6px"><b>⑥ Cách VERIFY (mọi bước sửa data):</b> chạy <code>detect_errors.py</code> (FIXABLE phải = 0); mật độ dấu tiếng Việt ~0.19 = khoẻ; khi sửa hàng loạt, so validity âm tiết TRƯỚC/SAU từng doc — phải <b>0 regression</b>.</p>
+  </div>
+
   <section class="session">
     <div class="session-head">
       <span class="snum">PHIÊN 1</span><span class="sdate">2026-06-08 → 06-09</span>
@@ -297,6 +350,17 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           </div>
         </div>
 
+        <div class="entry">
+          <span class="ph">⑮ Re-OCR theo TRANG (VNI còn sót)</span>
+          <h3>OCR đúng trang dính lỗi — chạy được, nhưng ROI khiêm tốn</h3>
+          <div class="card">
+            <p><span class="tag t-dec">CÔNG CỤ</span> <code>reocr.py</code> tái dùng gần hết utils (<code>_surya</code>, render pixmap, <code>_strip_page_num</code>, <code>_standardize</code>); chỉ thêm routing-theo-trang + dựng lại full_text từ PDF gốc. Resumable qua <code>reocr_done.log</code>. Chạy queue 1.005 doc: OCR <b>2.226 trang (18%)</b> ở 495 doc; 510 doc "đi qua" 0 trang.</p>
+            <p><span class="tag t-data">CHẤT LƯỢNG OCR: tốt</b></span> Letterhead/thân từng rác giờ ra tiếng Việt sạch (verify tay). Nhưng OCR tự đẻ <code>ƣ</code> ở 117 doc → dọn bằng <code>fix_legacy</code> (ƣ→ư).</p>
+            <p><span class="tag t-corr">ROI KHIÊM TỐN — nói thẳng</span> SẠCH chỉ <b>+116</b> (32.823→32.939), queue 1.005→<b>856</b>. Vì: (1) 510 doc là passthrough 0 trang (sparse/low-density/empty); (2) <b>182 doc còn residual</b> 4-10/11+ ký tự — rác <b>rải mỏng</b> nhiều trang, mỗi trang dưới ngưỡng <code>0.005</code> nên không trang nào được OCR. Ngưỡng cố định là công cụ cùn.</p>
+            <p><span class="tag t-dec">DỪNG (diminishing returns)</span> 856 doc còn lại chủ yếu là residual lẻ + boilerplate — thực tế đã dùng được cho search. Pass-2 hạ ngưỡng sẽ tốn GPU + rủi ro OCR-nhầm trang gần-sạch. Chốt Phiên 1 ở đây.</p>
+          </div>
+        </div>
+
       </div>
 
       <h4 class="sec">Kết quả &amp; cấu hình chốt (cuối Phiên 1)</h4>
@@ -309,7 +373,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Luồng chạy</div><div>producer/consumer: text (CPU) + 1 worker Surya (GPU) song song → text không bị scanned block</div>
         <div>Dọn rác font</div><div><code>fix_legacy.py</code>: ƣ→ư (16%) + dấu thanh mồ côi + TÕA→TÒA (cmap title) + bỏ PUA chữ-ký + strip control char · an toàn, idempotent</div>
         <div>Kiểm chất lượng</div><div><code>detect_errors.py</code> quét 100% corpus (phân loại theo VỊ TRÍ garble) → FIXABLE 0 · re-OCR queue <code>needs_reocr.txt</code></div>
-        <div>Decode font cũ</div><div><code>legacy_decode.py</code>: charmap TCVN3 (căn-chỉnh-boilerplate) + gác cổng âm tiết · giải cứu 919 doc · $0 không GPU · <b>sạch 95%</b> (32.823)</div>
+        <div>Decode font cũ</div><div><code>legacy_decode.py</code>: charmap TCVN3 (căn-chỉnh-boilerplate) + gác cổng âm tiết · giải cứu 919 doc · $0 không GPU</div>
+        <div>Re-OCR theo trang</div><div><code>reocr.py</code>: OCR đúng trang dính lỗi (reuse Surya) · 2.226 trang/495 doc · <b>sạch 32.939 (95,7%)</b> · 856 doc residual để lại</div>
         <div>Lọc font cũ</div><div><code>LEGACY_SIG</code> +chữ ký VNI · <code>purge_legacy.py</code> gỡ 65 doc rác-toàn-phần (≥2%), giữ doc lẫn · corpus còn 34.404</div>
       </div>
 
@@ -319,7 +384,8 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           <li><b>60% doc rỗng nội dung vụ án</b> — quyết định sản phẩm: lọc bỏ? hay embed full_text?</li>
           <li><b>Model embedding</b> — chưa chốt (e5-large theo doc cũ vs bge-m3 vs model VN 2026). Cần research.</li>
           <li><b>Tách 4 mục</b> — đang gác lại, làm full_text trước.</li>
-          <li><b>Re-OCR 1.005 doc (đã xếp hàng <code>needs_reocr.txt</code>):</b> sau khi <code>legacy_decode.py</code> dọn sạch TCVN3 ($0), phần sót chủ yếu là <b>VNI</b> (legacy_body 761 + legacy nặng 126 + rụng-dấu 122 + empty 4) — VNI tách âm tiết theo space nên charmap không cứu được. Cách đúng: <b>re-OCR theo TRANG</b> (chỉ trang dính lỗi, splice lại; median 1 trang/doc), KHÔNG re-OCR cả doc.</li>
+          <li><b>Re-OCR ĐÃ CHẠY (<code>reocr.py</code>):</b> 495 doc/2.226 trang OCR xong → sạch 32.939 (95,7%). Còn <b>856 doc residual</b> defer: rác rải mỏng dưới ngưỡng trang (182), low-density rụng-chữ (120), boilerplate (606 minor), empty (4). Đều đã usable cho search — pass-2 hạ ngưỡng là diminishing returns.</li>
+          <li><b>Rụng ký tự (low_density):</b> ~120 doc mất hẳn glyph trong text-layer ("phần"→"phn") — không có legacy để bắt, detector trang dựa-legacy bỏ sót. Cần tín hiệu mật-độ-dấu-thấp-theo-trang nếu muốn cứu (rủi ro OCR-nhầm trang nhiều-số).</li>
           <li><b>Nhiễu text sửa được = 0:</b> ƣ, TÒA→TÕA, PUA chữ-ký, control char đều đã quét sạch toàn corpus (xác nhận bằng <code>detect_errors.py</code>).</li>
         </ul>
       </div>
