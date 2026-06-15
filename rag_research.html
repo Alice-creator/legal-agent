@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research RAG SOTA — Legal Agent</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--line:#2b3340;--txt:#e6edf3;--muted:#8b949e;
+    --blue:#388bfd;--green:#2ea043;--amber:#d29922;--red:#da3633;--purple:#a371f7;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:30px 18px 80px}
+  .wrap{max-width:960px;margin:0 auto}
+  .kicker{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:25px;margin:4px 0 6px}
+  h2{font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+    border-bottom:1px solid var(--line);padding-bottom:7px;margin:34px 0 14px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 22px}
+  b{color:#fff}
+  code{background:#1b212a;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#d2a8ff}
+
+  .tldr{background:linear-gradient(180deg,#13351f,#0f1f16);border:1px solid #1f6b37;
+    border-left:4px solid var(--green);border-radius:10px;padding:14px 18px;margin-bottom:8px}
+  .tldr b{color:#56d364}
+
+  /* pipeline */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin:6px 0 4px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:10px 13px;
+    flex:1;min-width:120px;position:relative}
+  .step .n{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .step .t{font-weight:700;font-size:13.5px;margin:3px 0}
+  .step .d{font-size:11.5px;color:var(--muted)}
+  .step.hl{border-color:var(--green);border-left:3px solid var(--green)}
+  .step.opt{border-style:dashed;opacity:.8}
+  .arrow{align-self:center;color:var(--muted);font-size:18px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:13px 15px}
+  .card .q{font-weight:700;font-size:13.5px;margin-bottom:5px}
+  .card .r{font-size:13px;color:#7ee787;margin-bottom:4px}
+  .card .w{font-size:12px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  td.win{color:#56d364;font-weight:700}
+  .tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px}
+  .ok{background:rgba(46,160,67,.18);color:#3fb950}
+  .no{background:rgba(218,54,51,.18);color:#f85149}
+
+  .risk{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--red);
+    border-radius:8px;padding:11px 15px;margin-bottom:10px}
+  .risk b{color:#ff7b72}
+  .constraint{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:baseline}
+
+  .timeline{position:relative;padding-left:24px;margin-top:6px}
+  .timeline::before{content:"";position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--line)}
+  .ph{position:relative;margin-bottom:14px}
+  .ph::before{content:"";position:absolute;left:-22px;top:5px;width:11px;height:11px;border-radius:50%;
+    background:var(--panel);border:2px solid var(--blue)}
+  .ph .pt{font-weight:700;font-size:13.5px}
+  .ph .pd{font-size:12.5px;color:var(--muted)}
+
+  .ask{background:linear-gradient(180deg,#3a2d10,#241c0c);border:1px solid #7a5d1a;
+    border-left:4px solid var(--amber);border-radius:10px;padding:14px 18px}
+  .ask b{color:#e3b341}
+  .vs-cut{color:var(--muted);text-decoration:line-through}
+  a{color:var(--blue);font-size:12px} .src{font-size:12px;color:var(--muted);line-height:2}
+  .meta-row{font-size:12px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">📚 Báo cáo nghiên cứu</div>
+  <h1>RAG state-of-the-art (2025–2026) cho tìm-án-tương-tự tiếng Việt</h1>
+  <p class="sub">8 agent · 148 web lookup · grounded vào VN-MTEB, paper retrieval luật VN 2025, model card HF · mục tiêu: chốt pipeline embedding cho ~34k bản án KDTM, chạy <b>LOCAL-$0</b>.</p>
+
+  <div class="tldr">
+    <b>Kết luận:</b> giữ nguyên xương sống (Postgres/pgvector · HNSW cosine · chunk · FastAPI manager). Đổi 3 chỗ lớn: ① embed bằng <b>AITeamVN/Vietnamese_Embedding</b> (bge-m3 fine-tune luật, +20đ MRR@10) thay bge-m3 gốc · ② <b>hybrid dense+BM25 (RRF)</b> ngay từ đầu (đã có sẵn cột <code>tsv</code>) · ③ <b>parent-child</b> (search chunk → trả cả bản án). Bỏ late-chunking / GraphRAG / HyDE (thừa hoặc không hợp data).
+  </div>
+
+  <h2>Pipeline khuyến nghị</h2>
+  <p class="sub" style="margin:-6px 0 14px">App tải về <b>2 bản</b>: <b>v1 USER</b> (tìm kiếm, live) · <b>v2 DEVELOPER</b> (máy Mac, build + retrain — off 99%). Server 16GB·no-GPU chỉ làm <b>hybrid live</b>; mọi việc GPU (build/fine-tune/rerank) trên máy Mac, offline.</p>
+
+  <div style="background:#f7f4ea;border:1px solid var(--line);border-radius:10px;padding:6px 8px 2px;margin-bottom:14px;overflow-x:auto">
+    <div style="font:700 12px/1.4 -apple-system,sans-serif;color:#9a917b;letter-spacing:1px;padding:6px 8px 2px">① v2 · APP DEVELOPER — máy Mac (bật khi cần, off 99%): build kho + vòng cải tiến</div>
+    <svg viewBox="0 0 1500 300" style="width:100%;height:auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+      <defs>
+        <pattern id="d1" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#e2dcca"/></pattern>
+        <marker id="ah1" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,3.5 L0,7 z" fill="#2a2f3a"/></marker>
+      </defs>
+      <rect width="1500" height="300" fill="#f7f4ea"/><rect width="1500" height="300" fill="url(#d1)"/>
+
+      <!-- build row -->
+      <g stroke="#232834" stroke-width="2">
+        <rect x="30"  y="40" width="150" height="56" rx="11" fill="#fff"/>
+        <rect x="384" y="40" width="150" height="56" rx="11" fill="#fff"/>
+        <rect x="566" y="40" width="170" height="56" rx="11" fill="#fff"/>
+        <rect x="768" y="40" width="160" height="56" rx="11" fill="#e9f0fb"/>
+        <rect x="960" y="40" width="175" height="56" rx="11" fill="#fff"/>
+      </g>
+      <rect x="212" y="40" width="140" height="56" rx="11" fill="#eaf6ee" stroke="#1f7a3d" stroke-width="2"/>
+
+      <!-- loop container -->
+      <rect x="540" y="178" width="612" height="76" rx="12" fill="none" stroke="#9a917b" stroke-width="2" stroke-dasharray="7 6"/>
+      <text x="554" y="246" fill="#9a917b" font-size="11" font-weight="700">🔁 VÒNG CẢI TIẾN — bật Mac khi cần</text>
+      <g stroke="#232834" stroke-width="2" fill="#fff">
+        <rect x="560" y="190" width="160" height="50" rx="10"/>
+        <rect x="900" y="190" width="180" height="50" rx="10"/>
+      </g>
+      <rect x="745" y="190" width="140" height="50" rx="10" fill="#fff" stroke="#232834" stroke-width="2"/>
+
+      <g fill="none" stroke="#2a2f3a" stroke-width="2">
+        <path d="M180,68 H210" marker-end="url(#ah1)"/>
+        <path d="M352,68 H382" marker-end="url(#ah1)"/>
+        <path d="M534,68 H564" marker-end="url(#ah1)"/>
+        <path d="M736,68 H766" marker-end="url(#ah1)"/>
+        <path d="M928,68 H958" marker-end="url(#ah1)"/>
+        <path d="M430,215 H558" marker-end="url(#ah1)"/>
+        <path d="M720,215 H743" marker-end="url(#ah1)"/>
+        <path d="M885,215 H898" marker-end="url(#ah1)"/>
+        <path d="M990,190 V150 H651 V98" marker-end="url(#ah1)"/>
+      </g>
+
+      <g text-anchor="middle" fill="#1a1d24" font-weight="700" font-size="13.5">
+        <text x="105" y="64">Doc sạch · 33k</text>
+        <text x="282" y="64">Trích xuất</text>
+        <text x="459" y="64">Tách + chunk</text>
+        <text x="651" y="64">Embed</text>
+        <text x="848" y="64">Index (chunks)</text>
+        <text x="1047" y="64">Đẩy lên SERVER</text>
+      </g>
+      <g text-anchor="middle" fill="#5b6470" font-size="10.5" font-family="ui-monospace,Menlo,monospace">
+        <text x="105" y="82">bỏ rác OCR</text>
+        <text x="282" y="82">Phiên 1</text>
+        <text x="459" y="82">~450 tok</text>
+        <text x="651" y="82">AITeamVN · MPS</text>
+        <text x="848" y="82">≈130k chunk</text>
+        <text x="1047" y="82">push index</text>
+      </g>
+      <g text-anchor="middle" fill="#1a1d24" font-weight="700" font-size="12.5">
+        <text x="640" y="211">Query log</text>
+        <text x="815" y="211">Rerank batch</text>
+        <text x="990" y="211">Fine-tune</text>
+      </g>
+      <g text-anchor="middle" fill="#5b6470" font-size="10" font-family="ui-monospace,Menlo,monospace">
+        <text x="640" y="227">gom từ server</text>
+        <text x="815" y="227">đào hard-negative</text>
+        <text x="990" y="227">embedder + hard-neg</text>
+      </g>
+      <g fill="#6b7280" font-size="11" font-family="ui-monospace,Menlo,monospace">
+        <text x="300" y="211">query (server log)</text>
+        <text x="660" y="142" fill="#9a7b2a">model mới → re-embed kho</text>
+      </g>
+    </svg>
+  </div>
+
+  <div style="background:#f7f4ea;border:1px solid var(--line);border-radius:10px;padding:6px 8px 2px;margin-bottom:12px;overflow-x:auto">
+    <div style="font:700 12px/1.4 -apple-system,sans-serif;color:#9a917b;letter-spacing:1px;padding:6px 8px 2px">② v1 · LIVE (24/7) — user embed → server hybrid-only</div>
+    <svg viewBox="0 0 1200 250" style="width:100%;height:auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+      <defs>
+        <pattern id="d2" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#e2dcca"/></pattern>
+        <marker id="ah2" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,3.5 L0,7 z" fill="#2a2f3a"/></marker>
+      </defs>
+      <rect width="1200" height="250" fill="#f7f4ea"/><rect width="1200" height="250" fill="url(#d2)"/>
+
+      <rect x="20" y="30" width="490" height="160" rx="14" fill="none" stroke="#9a917b" stroke-width="2" stroke-dasharray="7 6"/>
+      <text x="34" y="52" fill="#9a917b" font-size="12" font-weight="700">MÁY USER (v1)</text>
+      <text x="190" y="52" fill="#1f7a3d" font-size="10.5" font-weight="700">📥 tải MODEL (link config)</text>
+      <rect x="600" y="30" width="560" height="200" rx="14" fill="none" stroke="#9a917b" stroke-width="2" stroke-dasharray="7 6"/>
+      <text x="614" y="52" fill="#9a917b" font-size="12" font-weight="700">SERVER · 16GB · KHÔNG GPU · 24/7</text>
+
+      <g stroke="#232834" stroke-width="2">
+        <rect x="36"  y="95" width="145" height="56" rx="11" fill="#fff"/>
+        <rect x="346" y="95" width="150" height="56" rx="11" fill="#fff"/>
+        <rect x="680" y="95" width="175" height="56" rx="11" fill="#fff"/>
+      </g>
+      <rect x="196" y="95" width="135" height="56" rx="11" fill="#eaf6ee" stroke="#1f7a3d" stroke-width="2"/>
+      <rect x="680" y="182" width="175" height="46" rx="11" fill="#e9f0fb" stroke="#232834" stroke-width="2"/>
+      <rect x="905" y="95" width="180" height="56" rx="11" fill="#e3b23c" stroke="#b8881f" stroke-width="2"/>
+
+      <g fill="none" stroke="#2a2f3a" stroke-width="2">
+        <path d="M181,123 H194" marker-end="url(#ah2)"/>
+        <path d="M331,123 H344" marker-end="url(#ah2)"/>
+        <path d="M496,123 H678" marker-end="url(#ah2)"/>
+        <path d="M767,182 V153" marker-end="url(#ah2)"/>
+        <path d="M855,123 H903" marker-end="url(#ah2)"/>
+      </g>
+
+      <g fill="#6b7280" font-size="11" font-family="ui-monospace,Menlo,monospace">
+        <text x="500" y="114">gửi {vector + text}</text>
+        <text x="772" y="172">đọc index</text>
+        <text x="905" y="172" fill="#9a7b2a">↩ về máy hiển thị</text>
+        <text x="612" y="246">📝 query được log → dùng cho vòng cải tiến v2</text>
+      </g>
+
+      <g text-anchor="middle" fill="#1a1d24" font-weight="700" font-size="13.5">
+        <text x="108" y="119">Thẩm phán</text>
+        <text x="263" y="119">Trích xuất</text>
+        <text x="421" y="119">Embed query</text>
+        <text x="767" y="119">Hybrid retrieve</text>
+        <text x="995" y="121" font-size="12.5">Bản án tương tự</text>
+        <text x="767" y="205" font-size="12">Index · 33k</text>
+      </g>
+      <g text-anchor="middle" fill="#5b6470" font-size="10.5" font-family="ui-monospace,Menlo,monospace">
+        <text x="108" y="137">gõ / nộp PDF</text>
+        <text x="263" y="137">P1 nếu PDF</text>
+        <text x="421" y="137">AITeamVN</text>
+        <text x="767" y="137">ANN + BM25 · RRF</text>
+        <text x="995" y="138">xếp hạng</text>
+        <text x="767" y="221">chunks·HNSW·BM25</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">
+    <div class="card"><div class="q">v1 · USER (live)</div><div class="w">Client mỏng: tải MODEL · embed query · gửi <b>{vector+text}</b> · hiện kết quả. Chạy laptop yếu. Server trả về sau khi <b>hybrid-only</b> (không rerank).</div></div>
+    <div class="card"><div class="q">v2 · DEVELOPER (máy Mac)</div><div class="w">Off 99%, bật khi cần. Build kho + <b>vòng cải tiến</b>: log query → <b>rerank batch</b> → đào hard-negative → <b>fine-tune</b> embedder → re-embed → đẩy server.</div></div>
+    <div class="card"><div class="q">☁️ Server · 16GB · no-GPU</div><div class="w">Giữ Index 33k + <code>documents</code>. Chỉ <b>hybrid retrieve</b> (CPU dư sức, nhiều user) + <b>log query</b>. <b>KHÔNG rerank/fine-tune</b> (không GPU) → đẩy hết sang Mac.</div></div>
+    <div class="card"><div class="q">Phát hành & riêng tư</div><div class="w">Model publish→app tải; fine-tune ⇒ re-embed index. ⚠️ <b>query log = dữ liệu toà</b> → ẩn danh / giữ cẩn thận.</div></div>
+  </div>
+  <p class="meta-row" style="margin-top:8px">🟩 reuse Phiên 1 · 🟦 index (ở SERVER) · 🟨 kết quả · ⬚ ranh giới máy · 🔁 vòng offline (Mac). <b>Live = hybrid-only mãi mãi</b>; rerank CHỈ trong vòng cải tiến offline để fine-tune model.</p>
+
+
+
+
+  <h2>⚠️ 3 ràng buộc research lôi ra (lật ván)</h2>
+  <div class="risk"><div class="constraint">
+    <b>① Prod = 8GB RAM, KHÔNG GPU</b><div>(từ <code>product_decision.md</code>, prompt không nhắc). M5 chỉ để embed offline. <b>Reranker</b> — đòn bẩy mạnh nhất — chạy CPU nặng RAM → thành phase-2 có điều kiện. Dùng <code>halfvec(1024)</code> để nửa RAM index.</div>
+  </div></div>
+  <div class="risk"><div class="constraint">
+    <b>② 53% corpus là Quyết định thủ tục</b><div>(đo thật: chỉ ~43-44% doc có header "NỘI DUNG VỤ ÁN"). "Tìm theo tình tiết" vô nghĩa với nửa kho → phải <b>gắn nhãn bản-án/quyết-định</b> + quyết định có cho vào kết quả không. Embed theo-section-nếu-có, không thì cả doc.</div>
+  </div></div>
+  <div class="risk"><div class="constraint">
+    <b>③ KHÔNG có dữ liệu eval</b><div>(query→case). Không đo/tune/fine-tune được → mọi lựa chọn model/chunk là <b>đoán</b> cho tới khi có eval set. Đây là rủi ro #1, chặn việc chốt model. Văn liệu 2026 thống nhất: <b>phải đo trên data của mình</b>, đừng tin leaderboard.</div>
+  </div></div>
+
+  <h2>Model embedding — vì sao chọn fine-tune luật-VN</h2>
+  <table>
+    <thead><tr><th>Model</th><th>Điểm VN</th><th>Ctx</th><th>Dim</th><th>License</th><th>Local</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td class="win">AITeamVN/Vietnamese_Embedding ★</td><td class="win">MRR@10 0.818<br>(Zalo legal)</td><td>2048</td><td>1024</td><td>Apache-2.0</td><td><span class="tag ok">✓</span></td><td>bge-m3 fine-tune luật VN · drop-in · dùng <b>v1</b></td></tr>
+      <tr><td>bge-m3 (gốc)</td><td>0.682 / VN-MTEB 39.84</td><td>8192</td><td>1024</td><td>MIT</td><td><span class="tag ok">✓</span></td><td>baseline A/B · có dense+sparse+ColBERT</td></tr>
+      <tr><td>multilingual-e5-large-instruct</td><td>VN-MTEB 40.88</td><td><b>512</b></td><td>1024</td><td>MIT</td><td><span class="tag ok">✓</span></td><td>ctx 512 quá ngắn cho doc dài → loại</td></tr>
+      <tr><td>Qwen3-Embedding-0.6B</td><td>chưa test VN<br>(đa ngữ #đầu)</td><td>32k</td><td>1024</td><td>Apache-2.0</td><td><span class="tag ok">✓</span></td><td>RoPE, mạnh chung nhưng chưa đo luật VN</td></tr>
+      <tr><td>gte-Qwen2-7B-instruct</td><td>VN-MTEB <b>46.05</b> (#1)</td><td>32k</td><td>3584</td><td>Apache-2.0</td><td><span class="tag no">7B</span></td><td>thắng VN thật nhưng 7B → nặng, để làm "trần"</td></tr>
+      <tr><td>halong / bkai / phobert-VN</td><td>VN-MTEB 25–34</td><td>256–512</td><td>768</td><td>Apache-2.0</td><td><span class="tag ok">✓</span></td><td>VN-specific cũ thua model đa ngữ · loại</td></tr>
+    </tbody>
+  </table>
+  <p class="meta-row">Sự thật then chốt (VN-MTEB, arXiv 2507.21500): <b>model đa ngữ RoPE thắng model VN-specific kiểu PhoBERT</b>. Nhưng fine-tune bge-m3 trên đúng luật VN (AITeamVN) lại thắng tiếp ở domain mình — cùng infra, $0 để đổi. Vẫn phải verify trên KDTM của mình (Zalo chỉ là proxy).</p>
+
+  <h2>7 quyết định kiến trúc (research chốt)</h2>
+  <div class="cards">
+    <div class="card"><div class="q">Model embed?</div><div class="r">→ AITeamVN/Vietnamese_Embedding (v1), giữ bge-m3 làm A/B</div><div class="w">+20đ MRR@10 trên luật, cùng 1024-dim/Apache-2.0/infra</div></div>
+    <div class="card"><div class="q">Embed gì khi 53% doc không có phần "nội dung vụ án"?</div><div class="r">→ section-nếu-có + fallback cả doc</div><div class="w">section-only sẽ làm nửa kho không tìm được</div></div>
+    <div class="card"><div class="q">Chunk kiểu gì?</div><div class="r">→ sliding-window ~400-512 tok (15% overlap) + parent-child</div><div class="w">late-chunking bất khả (fine-tune cap 2048 < doc p90 ~8.9k)</div></div>
+    <div class="card"><div class="q">cosine hay dot?</div><div class="r">→ L2-norm + cosine</div><div class="w">trên vector chuẩn hoá, dot ≡ cosine; giữ HNSW chuẩn</div></div>
+    <div class="card"><div class="q">vector hay halfvec?</div><div class="r">→ halfvec(1024)</div><div class="w">float16 nửa RAM/disk, gần như không mất recall — sống còn ở prod 8GB</div></div>
+    <div class="card"><div class="q">Hybrid hay dense-only?</div><div class="r">→ hybrid ngay (RRF k=60)</div><div class="w">đã có sẵn tsv; luật cần khớp token chính xác (Điều X, số vụ)</div></div>
+    <div class="card"><div class="q">Reranker giờ chưa?</div><div class="r">→ defer, có điều kiện</div><div class="w">đòn bẩy mạnh nhất NHƯNG khó deploy trên 8GB no-GPU; cần đo</div></div>
+  </div>
+
+  <h2>So với plan ban đầu</h2>
+  <table>
+    <thead><tr><th>Hạng mục</th><th>Plan cũ</th><th>Sau research</th></tr></thead>
+    <tbody>
+      <tr><td>Model</td><td>bge-m3</td><td class="win">AITeamVN/Vietnamese_Embedding</td></tr>
+      <tr><td>Chunk</td><td>sliding-window</td><td class="win">+ section-aware + parent-child</td></tr>
+      <tr><td>Lưu vector</td><td>vector(1024)</td><td class="win">halfvec(1024)</td></tr>
+      <tr><td>Retrieval</td><td>dense cosine</td><td class="win">hybrid dense+BM25 RRF</td></tr>
+      <tr><td>Rerank</td><td>E4 (mặc nhiên)</td><td>defer, có điều kiện (8GB)</td></tr>
+      <tr><td>Late chunking</td><td>—</td><td class="vs-cut">bỏ (cap 2048 tok)</td></tr>
+      <tr><td>GraphRAG / HyDE / ColBERT</td><td>—</td><td class="vs-cut">bỏ (thừa ở 34k)</td></tr>
+      <tr><td>Xương sống (PG/pgvector/HNSW/FastAPI)</td><td colspan="2" style="color:#56d364">✓ research XÁC NHẬN giữ nguyên</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Kế hoạch build (E0 → E5)</h2>
+  <div class="timeline">
+    <div class="ph"><div class="pt">E0 · Bật stack</div><div class="pd"><code>CREATE EXTENSION vector</code> + bảng <code>chunks</code> (doc_id, section, chunk_text, <code>halfvec(1024)</code>, tsv + GIN). Không đổi image.</div></div>
+    <div class="ph"><div class="pt">E1 · Tách section + chunk (offline M5)</div><div class="pd">regex bao-dung-dấu nhận 4 header → chunk facts/reasoning nếu có, không thì cả doc · tag bản-án/quyết-định · chỉ bucket clean/minor (tránh rác OCR).</div></div>
+    <div class="ph"><div class="pt">E2 · Embed + index (offline M5/MPS)</div><div class="pd">AITeamVN (L2-norm) · build HNSW <code>halfvec_cosine_ops</code> (m=16, ef_construction=64).</div></div>
+    <div class="ph"><div class="pt">E3 · Endpoint hybrid (manager backend)</div><div class="pd">Nhận query <b>text HOẶC PDF</b> (PDF → <code>utils.extract_text</code> Phiên 1) → embed → 1 SQL CTE: ANN top-50 + ts_rank_cd top-50 → RRF(60) → max-pool → dedupe parent. <code>ef_search=80</code>.</div></div>
+    <div class="ph"><div class="pt">E4 · Eval harness — <b>cổng quyết định</b></div><div class="pd">ranx · nDCG@10 / Recall@50 / MRR@10 · ~300-500 query synthetic (Ollama) + 50-100 gold hand-label · A/B model & chunk & hybrid.</div></div>
+    <div class="ph"><div class="pt">E5 · Reranker (có điều kiện)</div><div class="pd">chỉ sau khi E4 cho thấy trần hybrid · A/B AITeamVN/Vietnamese_Reranker vs ViRanker · đo RAM/latency trên server 8GB thật · ngưỡng "không có án tương tự rõ".</div></div>
+  </div>
+
+  <h2>Rủi ro phải nhớ</h2>
+  <div class="risk"><b>Eval rỗng</b> — không có nhãn → không validate/tune/fine-tune được (đường tới gain lớn nhất của reranker bị chặn). Phải dựng eval set trước khi chốt.</div>
+  <div class="risk"><b>Rác OCR kéo trần</b> — embed/index chỉ từ text sạch; doc reocr/garble làm hỏng cả dense lẫn lexical.</div>
+  <div class="risk"><b>Bẫy "giống giả" trong luật</b> — cùng trích "Điều X" làm 2 vụ không liên quan trông giống nhau với cả vector lẫn LLM-judge. Chỉ eval người-duyệt mới chặn được.</div>
+  <div class="risk"><b>Eval synthetic lạc quan ảo</b> — query do LLM sinh thường dễ/trùng từ vựng → thổi điểm. Chỉ dùng để so config, không dùng làm điểm tuyệt đối.</div>
+
+  <h2>👉 2 quyết định cần bạn chốt trước E0</h2>
+  <div class="ask">
+    <b>① Prod thật sự là 8GB RAM + không GPU?</b> → quyết định có reranker không + dùng halfvec. Nếu prod mạnh hơn thì reranker vào sớm.<br><br>
+    <b>② 53% doc Quyết định thủ tục</b> (không có tình tiết vụ án): <b>index + gắn nhãn để lọc</b> (vẫn tìm được khi cần), hay <b>loại hẳn</b> khỏi tìm-theo-tình-tiết? <br><span class="w" style="color:var(--muted);font-size:12px">Đề xuất: index hết + tag, để thẩm phán bật/tắt — linh hoạt hơn loại bỏ.</span><br><br>
+    <b>③ Query bằng PDF dài</b> embed thế nào: trích "nội dung vụ án" của query rồi 1 vector, hay chunk query + multi-vector fuse (doc-to-doc)? <br><span class="w" style="color:var(--muted);font-size:12px">Đề xuất: thử (a) trích-facts trước cho đơn giản, để (b) chunk-fuse khi cần độ chính xác cao hơn — cùng dùng splitter Phiên 1.</span>
+  </div>
+
+  <h2>Nguồn chính</h2>
+  <p class="src">
+    VN-MTEB (benchmark VN đầu tiên): <a href="https://arxiv.org/abs/2507.21500">arXiv 2507.21500</a> ·
+    AITeamVN/Vietnamese_Embedding: <a href="https://huggingface.co/AITeamVN/Vietnamese_Embedding">HF</a> ·
+    Qwen3-Embedding: <a href="https://qwenlm.github.io/blog/qwen3-embedding/">blog</a> ·
+    BGE-M3: <a href="https://huggingface.co/BAAI/bge-m3">HF</a> ·
+    Late Chunking: <a href="https://arxiv.org/abs/2409.04701">arXiv 2409.04701</a> ·
+    Anthropic Contextual Retrieval: <a href="https://www.anthropic.com/news/contextual-retrieval">anthropic.com</a> ·
+    Paper retrieval luật VN (rerank MRR 62→79): <a href="https://arxiv.org/abs/2507.14619">arXiv 2507.14619</a> ·
+    ViRanker: <a href="https://huggingface.co/namdp-ptit/ViRanker">HF</a> ·
+    Hybrid+RRF trong Postgres: <a href="https://dev.to/gabrielanhaia/hybrid-search-in-100-lines-bm25-pgvector-with-rrf-merge-58cn">dev.to</a> ·
+    VectorChord (ColBERT trong PG, phase sau): <a href="https://github.com/tensorchord/VectorChord">github</a>
+    <br>(đầy đủ ~60 nguồn trong output workflow <code>wkcajjvgp</code>.)
+  </p>
+
+</div>
+</body>
+</html>
