@@ -225,15 +225,15 @@
 
 
 
-  <h2>⚠️ 3 ràng buộc research lôi ra (lật ván)</h2>
-  <div class="risk"><div class="constraint">
-    <b>① Prod = 8GB RAM, KHÔNG GPU</b><div>(từ <code>product_decision.md</code>, prompt không nhắc). M5 chỉ để embed offline. <b>Reranker</b> — đòn bẩy mạnh nhất — chạy CPU nặng RAM → thành phase-2 có điều kiện. Dùng <code>halfvec(1024)</code> để nửa RAM index.</div>
+  <h2>✅ 3 điều research lôi ra — ĐÃ GIẢI trong lúc bàn</h2>
+  <div class="risk" style="border-left-color:var(--green)"><div class="constraint">
+    <b>① Phần cứng deploy</b><div>Research đoán "prod 8GB no-GPU". Thực: <b>server 16GB no-GPU</b> + <b>app tải về</b>. <span style="color:#56d364">GIẢI: client embed query · server chỉ hybrid-only (không GPU vẫn dư) · mọi việc GPU (build/fine-tune/rerank) dồn sang máy Mac offline.</span></div>
   </div></div>
-  <div class="risk"><div class="constraint">
-    <b>② 53% corpus là Quyết định thủ tục</b><div>(đo thật: chỉ ~43-44% doc có header "NỘI DUNG VỤ ÁN"). "Tìm theo tình tiết" vô nghĩa với nửa kho → phải <b>gắn nhãn bản-án/quyết-định</b> + quyết định có cho vào kết quả không. Embed theo-section-nếu-có, không thì cả doc.</div>
+  <div class="risk" style="border-left-color:var(--green)"><div class="constraint">
+    <b>② 53% corpus là Quyết định thủ tục</b><div>(chỉ ~43-44% doc có header "NỘI DUNG VỤ ÁN"). <span style="color:#56d364">GIẢI: index HẾT + gắn nhãn bản-án/quyết-định để thẩm phán lọc; embed section-nếu-có, không thì cả doc.</span></div>
   </div></div>
-  <div class="risk"><div class="constraint">
-    <b>③ KHÔNG có dữ liệu eval</b><div>(query→case). Không đo/tune/fine-tune được → mọi lựa chọn model/chunk là <b>đoán</b> cho tới khi có eval set. Đây là rủi ro #1, chặn việc chốt model. Văn liệu 2026 thống nhất: <b>phải đo trên data của mình</b>, đừng tin leaderboard.</div>
+  <div class="risk" style="border-left-color:var(--green)"><div class="constraint">
+    <b>③ Chưa có dữ liệu eval</b><div>(query→case). <span style="color:#56d364">GIẢI: <b>synthetic</b> — LLM sinh tình tiết từ mỗi bản án, bản án gốc = đáp án đúng, lọc giữ query mà nó lọt top-40 → đủ cặp để A/B model/chunk (đo được, hết đoán).</span> Caveat (KHÔNG phải blocker): synthetic hơi dễ → dùng so tương đối; thêm gold set người-duyệt nhỏ chỉ để chốt release.</div>
   </div></div>
 
   <h2>Model embedding — vì sao chọn fine-tune luật-VN</h2>
@@ -287,7 +287,7 @@
   </div>
 
   <h2>Rủi ro phải nhớ</h2>
-  <div class="risk"><b>Eval rỗng</b> — không có nhãn → không validate/tune/fine-tune được (đường tới gain lớn nhất của reranker bị chặn). Phải dựng eval set trước khi chốt.</div>
+  <div class="risk" style="border-left-color:var(--green)"><b>Eval</b> — <span style="color:#56d364">GIẢI bằng synthetic</span> (sinh query từ bản án, gốc = đáp án): đủ để A/B chọn model/chunk. Caveat: synthetic lạc quan → thêm gold set người-duyệt nhỏ để chốt release (không chặn build).</div>
   <div class="risk"><b>Rác OCR kéo trần</b> — embed/index chỉ từ text sạch; doc reocr/garble làm hỏng cả dense lẫn lexical.</div>
   <div class="risk"><b>Bẫy "giống giả" trong luật</b> — cùng trích "Điều X" làm 2 vụ không liên quan trông giống nhau với cả vector lẫn LLM-judge. Chỉ eval người-duyệt mới chặn được.</div>
   <div class="risk"><b>Eval synthetic lạc quan ảo</b> — query do LLM sinh thường dễ/trùng từ vựng → thổi điểm. Chỉ dùng để so config, không dùng làm điểm tuyệt đối.</div>
