@@ -61,7 +61,7 @@ export default function DocList() {
             <tbody>
               {data.items.map(d => (
                 <tr key={d.id}>
-                  <td><Link to={'/docs/' + d.id}>{d.filename}</Link></td>
+                  <td><Link to={'/docs/' + d.id + (q ? '?q=' + encodeURIComponent(q) : '')}>{d.filename}</Link></td>
                   <td>{d.route}</td>
                   <td><span className={'badge b-' + d.bucket}>{d.bucket}</span></td>
                   <td className="muted">{d.reocr_reason || ''}</td>

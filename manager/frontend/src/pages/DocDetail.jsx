@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
+import { highlight, countGarble } from '../highlight.jsx'
 
 export default function DocDetail() {
   const { id } = useParams()
   const nav = useNavigate()
+  const [sp] = useSearchParams()
+  const q = sp.get('q') || ''
   const [d, setD] = useState(null)
   const [edit, setEdit] = useState(false)
   const [txt, setTxt] = useState('')
@@ -50,6 +53,8 @@ export default function DocDetail() {
       <div className="meta">
         route <b>{d.route}</b> · {d.char_count?.toLocaleString()} ký tự ·
         mật độ dấu {d.diacritic_density?.toFixed(3)} · legacy {d.legacy_density?.toFixed(4)}
+        {(() => { const g = countGarble(d.full_text); return g
+          ? <> · <span className="garble-n">{g} ký tự rác</span></> : null })()}
       </div>
       <div className="actions">
         {!edit
@@ -64,10 +69,10 @@ export default function DocDetail() {
 
       <div className="split">
         <div className="pane">
-          <h4>full_text</h4>
+          <h4>full_text <span className="legend"><i className="hg">▦</i> rác {q && <><i className="hq">▦</i> từ khoá</>}</span></h4>
           {edit
             ? <textarea value={txt} onChange={e => setTxt(e.target.value)} />
-            : <pre>{d.full_text}</pre>}
+            : <pre>{highlight(d.full_text, q)}</pre>}
         </div>
         <div className="pane">
           <h4>PDF gốc (đối chiếu)</h4>

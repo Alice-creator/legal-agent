@@ -60,5 +60,12 @@ tbody tr:hover { background: #131922; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; height: calc(100vh - 250px); min-height: 460px; }
 .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .pane pre { margin: 0; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12.5px/1.5 ui-monospace, Menlo, monospace; flex: 1; }
+mark.hg { background: rgba(218,54,51,.30); color: #ffb3ae; border-radius: 2px; }
+mark.hq { background: rgba(210,153,34,.45); color: #fff; border-radius: 2px; }
+.legend { float: right; font-weight: 400; font-size: 11px; color: var(--muted); }
+.legend i { font-style: normal; padding: 0 3px; margin-left: 8px; border-radius: 2px; }
+.legend i.hg { background: rgba(218,54,51,.30); color: #ffb3ae; }
+.legend i.hq { background: rgba(210,153,34,.45); color: #fff; }
+.garble-n { color: #f85149; font-weight: 600; }
 .pane textarea { flex: 1; resize: none; font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
 .pane iframe { flex: 1; border: 0; background: #fff; border-radius: 4px; }
