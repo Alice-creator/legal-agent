@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-health:
+    name: Build backend image + health check
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: legal
+          POSTGRES_USER: legal
+          POSTGRES_PASSWORD: legal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legal -d legal"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply schema
+        run: PGPASSWORD=legal psql -h localhost -U legal -d legal -f manager/schema.sql
+
+      - name: Build backend image
+        run: docker build -t legal-backend -f manager/backend/Dockerfile .
+
+      - name: Run backend
+        run: |
+          docker run -d --name be --network host \
+            -e PG_DSN=postgresql://legal:legal@localhost:5432/legal legal-backend
+
+      - name: Health check (/health -> 200, db ok)
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health 2>/dev/null | grep -q '"status":"ok"'; then
+              echo "✓ health OK:"; curl -s http://localhost:8000/health; echo; exit 0
+            fi
+            sleep 2
+          done
+          echo "✗ health FAILED — backend logs:"; docker logs be; exit 1

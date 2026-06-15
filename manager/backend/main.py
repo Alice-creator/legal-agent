@@ -52,6 +52,16 @@ _UPDATE = """UPDATE documents SET full_text=%s, bucket=%s, reocr_reason=%s,
   tsv=to_tsvector('simple', unaccent(%s)), updated_at=now() WHERE id=%s"""
 
 
+@app.get("/health")
+def health():
+    """Liveness + DB ping cho load-balancer / CI. 200 nếu DB ok, 503 nếu không."""
+    try:
+        _q("SELECT 1", one=True)
+        return {"status": "ok", "db": "ok"}
+    except Exception as ex:
+        raise HTTPException(503, f"db down: {str(ex)[:150]}")
+
+
 @app.get("/api/stats")
 def stats():
     return {

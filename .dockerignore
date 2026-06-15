@@ -1,0 +1,14 @@
+# giữ build context nhỏ — chỉ lấy code + vi_syllables.txt
+.git/
+.venv/
+.venv-surya/
+venv/
+data/*
+!data/vi_syllables.txt
+manager/frontend/node_modules/
+manager/frontend/dist/
+**/__pycache__/
+*.pyc
+*.html
+*.out
+*.log
