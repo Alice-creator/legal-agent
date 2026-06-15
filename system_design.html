@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thiết kế hệ thống + Deploy — Legal Agent</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--line:#2b3340;--txt:#e6edf3;--muted:#8b949e;
+    --blue:#388bfd;--green:#2ea043;--amber:#d29922;--red:#da3633;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:30px 18px 80px}
+  .wrap{max-width:980px;margin:0 auto}
+  .kicker{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:24px;margin:4px 0 6px}
+  h2{font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+    border-bottom:1px solid var(--line);padding-bottom:7px;margin:32px 0 14px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 18px} b{color:#fff}
+  code{background:#1b212a;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#d2a8ff}
+  .tldr{background:linear-gradient(180deg,#13351f,#0f1f16);border:1px solid #1f6b37;
+    border-left:4px solid var(--green);border-radius:10px;padding:14px 18px;margin-bottom:8px}
+  .tldr b{color:#56d364}
+  .canvas{background:#f7f4ea;border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:14px;overflow-x:auto}
+  .cap{font:700 12px/1.4 -apple-system,sans-serif;color:#9a917b;letter-spacing:1px;padding:4px 6px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:13px 15px}
+  .card .q{font-weight:700;font-size:13.5px;margin-bottom:5px}
+  .card .w{font-size:12.5px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  ol,ul{margin:6px 0;padding-left:22px} li{margin:5px 0;font-size:13.5px}
+  .open{border-left:3px solid var(--amber);padding:2px 0 2px 14px;margin:6px 0}
+  .meta-row{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">🏗️ Thiết kế hệ thống + Deploy</div>
+  <h1>Legal Agent — kiến trúc production</h1>
+  <p class="sub">Chốt: <b>App v1 = Tauri</b> (tải về, nhẹ) · <b>Model host = HuggingFace</b> · <b>Server = Ubuntu 16GB no-GPU</b> (Docker) · client-embed, server hybrid-only, dev/Mac lo build+fine-tune.</p>
+
+  <div class="tldr"><b>Bức tranh:</b> 4 thành phần — 🍎 <b>Máy Mac (v2 dev)</b> dựng index + fine-tune → publish MODEL lên 🤗 <b>HuggingFace</b> + push INDEX sang ☁️ <b>Server</b>. 💻 <b>App v1 (Tauri)</b> tải model từ HF, embed query tại máy, gửi <code>{vector+text}</code> lên Server (Postgres+pgvector + FastAPI), nhận bản án. Server log query → vòng cải tiến trên Mac.</p></div>
+
+  <h2>① Toàn cảnh production</h2>
+  <div class="canvas">
+    <div class="cap">4 thành phần · 3 luồng (build/publish · live · cải tiến)</div>
+    <svg viewBox="0 0 1000 480" style="width:100%;height:auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+      <defs>
+        <pattern id="dt" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#e2dcca"/></pattern>
+        <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,3.5 L0,7 z" fill="#2a2f3a"/></marker>
+      </defs>
+      <rect width="1000" height="480" fill="#f7f4ea"/><rect width="1000" height="480" fill="url(#dt)"/>
+
+      <!-- nodes -->
+      <rect x="120" y="60" width="250" height="88" rx="12" fill="#fff" stroke="#232834" stroke-width="2"/>
+      <rect x="560" y="50" width="320" height="100" rx="12" fill="#eef4fb" stroke="#232834" stroke-width="2"/>
+      <rect x="560" y="300" width="340" height="140" rx="12" fill="#e9f0fb" stroke="#232834" stroke-width="2"/>
+      <rect x="60" y="300" width="300" height="140" rx="12" fill="#fff" stroke="#232834" stroke-width="2"/>
+
+      <g fill="none" stroke="#2a2f3a" stroke-width="2">
+        <path d="M558,96 H372" marker-end="url(#a)"/>
+        <path d="M680,150 V298" marker-end="url(#a)"/>
+        <path d="M245,148 V298" marker-end="url(#a)"/>
+        <path d="M360,360 H558" marker-end="url(#a)"/>
+        <path d="M558,398 H362" marker-end="url(#a)"/>
+      </g>
+      <g fill="none" stroke="#9a7b2a" stroke-width="2" stroke-dasharray="6 5">
+        <path d="M820,300 V152" marker-end="url(#a)"/>
+      </g>
+
+      <g fill="#6b7280" font-size="11.5" font-family="ui-monospace,Menlo,monospace">
+        <text x="392" y="90">publish MODEL</text>
+        <text x="688" y="232">push INDEX</text>
+        <text x="688" y="248">(pg_dump)</text>
+        <text x="252" y="232">tải model</text>
+        <text x="252" y="248">(cài/update)</text>
+        <text x="392" y="352">{vector + text}</text>
+        <text x="392" y="416">← bản án</text>
+        <text x="828" y="232" fill="#9a7b2a">query log</text>
+        <text x="828" y="248" fill="#9a7b2a">→ cải tiến</text>
+      </g>
+
+      <g fill="#1a1d24" font-weight="700" font-size="14">
+        <text x="245" y="98" text-anchor="middle">🤗 HuggingFace</text>
+        <text x="720" y="92" text-anchor="middle">🍎 Máy Mac (v2 · dev)</text>
+        <text x="730" y="345" text-anchor="middle">☁️ Server · Ubuntu 16GB</text>
+        <text x="210" y="345" text-anchor="middle">💻 App v1 (Tauri)</text>
+      </g>
+      <g fill="#5b6470" font-size="11" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">
+        <text x="245" y="120">MODEL (versioned)</text>
+        <text x="720" y="114">build index · fine-tune</text>
+        <text x="720" y="132">off 99% · bật khi cần</text>
+        <text x="730" y="372">Postgres+pgvector · FastAPI</text>
+        <text x="730" y="390">Caddy · hybrid retrieve</text>
+        <text x="730" y="408">log query · no-GPU</text>
+        <text x="210" y="372">embed query (CPU)</text>
+        <text x="210" y="390">UI · nhập tình tiết/PDF</text>
+        <text x="210" y="408">Win / Linux / macOS</text>
+      </g>
+    </svg>
+  </div>
+
+  <h2>② Server stack (deploy trên Ubuntu 16GB)</h2>
+  <div class="canvas">
+    <div class="cap">docker-compose: Caddy (TLS) → FastAPI → Postgres+pgvector</div>
+    <svg viewBox="0 0 1020 190" style="width:100%;height:auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+      <defs>
+        <pattern id="dt2" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#e2dcca"/></pattern>
+        <marker id="a2" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,3.5 L0,7 z" fill="#2a2f3a"/></marker>
+      </defs>
+      <rect width="1020" height="190" fill="#f7f4ea"/><rect width="1020" height="190" fill="url(#dt2)"/>
+      <rect x="225" y="28" width="755" height="130" rx="14" fill="none" stroke="#9a917b" stroke-width="2" stroke-dasharray="7 6"/>
+      <text x="240" y="48" fill="#9a917b" font-size="12" font-weight="700">docker-compose · Ubuntu 16GB · no-GPU</text>
+      <g stroke="#232834" stroke-width="2">
+        <rect x="40"  y="78" width="150" height="60" rx="11" fill="#fff"/>
+        <rect x="250" y="78" width="170" height="60" rx="11" fill="#fff"/>
+        <rect x="480" y="78" width="200" height="60" rx="11" fill="#fff"/>
+        <rect x="740" y="78" width="220" height="60" rx="11" fill="#e9f0fb"/>
+      </g>
+      <g fill="none" stroke="#2a2f3a" stroke-width="2">
+        <path d="M190,108 H248" marker-end="url(#a2)"/>
+        <path d="M420,108 H478" marker-end="url(#a2)"/>
+        <path d="M680,108 H738" marker-end="url(#a2)"/>
+      </g>
+      <g fill="#1a1d24" font-weight="700" font-size="13.5" text-anchor="middle">
+        <text x="115" y="104">🌐 App v1</text>
+        <text x="335" y="104">Caddy</text>
+        <text x="580" y="104">FastAPI</text>
+        <text x="850" y="104">Postgres + pgvector</text>
+      </g>
+      <g fill="#5b6470" font-size="10.5" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">
+        <text x="115" y="122">{vector+text}</text>
+        <text x="335" y="122">TLS · :443</text>
+        <text x="580" y="122">hybrid · :8000</text>
+        <text x="850" y="122">chunks + documents</text>
+      </g>
+    </svg>
+  </div>
+
+  <h2>Thành phần — máy nào làm gì</h2>
+  <table>
+    <thead><tr><th>Thành phần</th><th>Chạy gì</th><th>Khi nào</th></tr></thead>
+    <tbody>
+      <tr><td>🍎 <b>Máy Mac</b> (v2 dev)</td><td>Pipeline Phiên 1 + chunk + embed (build index) · rerank batch + fine-tune (vòng cải tiến) · publish model + push index</td><td>offline, bật khi cần</td></tr>
+      <tr><td>🤗 <b>HuggingFace</b></td><td>Host MODEL embed (có version). App tải qua link config khi cài/update</td><td>luôn (CDN của HF)</td></tr>
+      <tr><td>☁️ <b>Server Ubuntu 16GB</b></td><td>Caddy (TLS) + FastAPI (hybrid retrieve: ANN+BM25→RRF→max-pool) + Postgres/pgvector (chunks+documents) · log query</td><td>24/7</td></tr>
+      <tr><td>💻 <b>App v1 (Tauri)</b></td><td>Tải model · embed query (CPU) · UI nhập tình tiết/PDF · gửi {vector+text} · hiện bản án</td><td>khi user dùng</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Checklist deploy</h2>
+  <p class="sub" style="margin:2px 0 8px"><b>Server (1 lần):</b></p>
+  <ol>
+    <li>Provision Ubuntu 16GB + cài Docker + Docker Compose.</li>
+    <li><code>docker-compose</code>: <code>db</code> (pgvector/pgvector:pg16) + <code>backend</code> (FastAPI/uvicorn, reuse <code>manager/backend</code>) + <code>caddy</code> (reverse proxy + auto-TLS).</li>
+    <li>Đưa INDEX lên: <code>pg_dump</code> bảng <code>documents</code> + <code>chunks</code> (đã embed) từ Mac → <code>scp</code> → restore vào Postgres server. (Server không-GPU nên KHÔNG embed lại — chỉ nhận vector dựng sẵn.)</li>
+    <li>Domain → Caddy (HTTPS tự động). Mở chỉ :443.</li>
+    <li>Bật log query (ghi bảng <code>query_log</code>) cho vòng cải tiến v2.</li>
+  </ol>
+  <p class="sub" style="margin:8px 0 8px"><b>App v1 (mỗi lần phát hành):</b></p>
+  <ol>
+    <li>Export model AITeamVN → <b>ONNX</b> · publish lên HuggingFace (có version).</li>
+    <li>Build Tauri cho 3 OS (.exe / .dmg / .AppImage); config trỏ HF model + endpoint server.</li>
+    <li>App lần đầu chạy: tải model từ HF (~1-2GB) → cache. Update model = tải bản mới theo version.</li>
+  </ol>
+
+  <h2>⚠️ Hạng mục kỹ thuật cần giải khi build</h2>
+  <div class="open"><b>Embed query trong Tauri (CPU):</b> export AITeamVN → ONNX, chạy bằng <code>ort</code> (onnxruntime Rust) + <code>tokenizers</code> (Rust). 1 query trên CPU ~1-3s, OK. Đây là phần khó nhất của v1.</div>
+  <div class="open"><b>Trích xuất query-PDF:</b> PDF text → PyMuPDF (nhẹ, nhúng được). PDF scan → cần OCR (nặng) → đẩy server hoặc bảo user dán text. Khác với kho (Surya offline).</div>
+  <div class="open"><b>Auth / license server trả phí:</b> nhiều user + server tính phí → cần token/API-key gắn app để chặn truy cập trái phép. Quyết định cơ chế license.</div>
+  <div class="open"><b>Chuyển index Mac→Server:</b> pg_dump/restore (lần đầu + mỗi khi re-embed). Cân nhắc dump chỉ <code>chunks</code>+<code>documents</code>, hoặc logical replication nếu cập nhật thường.</div>
+  <div class="open"><b>Riêng tư:</b> query rời máy lên server (cho BM25+log). Court data → cân nhắc ẩn danh log + TLS bắt buộc.</div>
+
+  <p class="meta-row">Nối tiếp Phiên 2: E2 (embed) đang chạy → E3 (endpoint hybrid trong <code>manager/backend</code>) → E4 (eval synthetic) → đóng gói server + Tauri theo blueprint này.</p>
+
+</div>
+</body>
+</html>
