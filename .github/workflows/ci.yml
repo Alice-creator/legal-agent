@@ -21,7 +21,7 @@ jobs:
           --health-cmd "pg_isready -U legal -d legal"
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Apply schema
         run: PGPASSWORD=legal psql -h localhost -U legal -d legal -f manager/schema.sql
