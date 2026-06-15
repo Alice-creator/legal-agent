@@ -39,9 +39,11 @@ def build_hnsw(conn):
 
 
 def main(limit=None):
-    print(f"load {MODEL} (fp16, MPS)...", flush=True)
+    fp16 = bool(os.environ.get("EMBED_FP16"))
+    print(f"load {MODEL} (MPS, {'fp16' if fp16 else 'fp32'})...", flush=True)
     m = SentenceTransformer(MODEL, device="mps")
-    m.half()
+    if fp16:
+        m.half()   # ~2x nhanh, gần như không mất chất lượng — nhưng MẶC ĐỊNH fp32
     conn = psycopg.connect(DSN)
     total = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
     done0 = conn.execute("SELECT count(*) FROM chunks WHERE embedding IS NOT NULL").fetchone()[0]
