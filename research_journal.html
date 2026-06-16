@@ -405,11 +405,91 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
     </div>
   </section>
 
-  <section class="session next">
+  <section class="session">
     <div class="session-head">
-      <span class="snum">PHIÊN 2</span><span class="sdate">— sắp tới —</span>
-      <h2>Embedding &amp; search (dự kiến)</h2>
-      <p class="sgoal"><b>Mục tiêu:</b> chốt model embedding · dựng index pgvector · API tìm kiếm. Bắt đầu bằng việc quyết "60% doc rỗng nội dung vụ án".</p>
+      <span class="snum">PHIÊN 2</span><span class="sdate">2026-06-10 → 06-16</span>
+      <h2>Embedding &amp; search — dựng index + API tìm bản án tương tự</h2>
+      <p class="sgoal"><b>Mục tiêu:</b> từ corpus sạch → chốt model embedding (research SOTA) · chốt <b>kiến trúc triển khai</b> · chunk + embed 33.723 doc → index <span class="l0">pgvector LOCAL-$0</span> · API tìm kiếm hybrid cho thẩm phán.</p>
+      <p class="senv">Máy dev: Apple M5 · 32GB · MPS (Metal). DB: Postgres 16 + pgvector 0.8.2 (Docker, named volume).</p>
+    </div>
+    <div class="session-body">
+      <div class="timeline">
+
+        <div class="entry">
+          <span class="ph">⑰ Research RAG SOTA</span>
+          <h3>Đa-agent quét web → chốt model embedding tiếng Việt luật</h3>
+          <div class="card">
+            <p><span class="tag t-inv">KHẢO SÁT</span> Chạy workflow <b>8 agent</b> quét song song (model embedding VN, hybrid retrieval, chunking luật, rerank, eval). Tổng hợp vào <code>rag_research.html</code>.</p>
+            <p><span class="tag t-dec">CHỐT MODEL</span> <code>AITeamVN/Vietnamese_Embedding</code> — fine-tune <b>BGE-M3</b> cho luật VN: <b>MRR@10 0,818</b> vs bge-m3 gốc 0,682 (Legal Zalo). 1024-dim · ctx 8192 · Apache-2.0 · case-sensitive (⇒ <b>KHÔNG lowercase</b>). Giữ bge-m3 gốc làm A/B.</p>
+            <p><span class="tag t-dec">CHỐT RETRIEVAL</span> Hybrid <b>dense (HNSW cosine) + BM25</b>, hợp nhất <b>RRF k=60</b>; chunk ~450 tok + <b>parent-child</b> (khớp chunk → trả cả bản án). <code>halfvec(1024)</code> để index gọn nửa dung lượng.</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">⑱ Chốt kiến trúc triển khai</span>
+          <h3>App tải về 2 bản · client embed · server hybrid-only no-GPU · rerank offline</h3>
+          <div class="card">
+            <p><span class="tag t-dec">TOPOLOGY (sau nhiều vòng bàn)</span> <b>App tải về, 2 bản</b>: <b>v1 THẨM PHÁN</b> (live 24/7) — máy user embed query (model tải qua link config) → gửi <code>{vector+text}</code> → <b>server 16GB no-GPU</b> làm hybrid-only → trả bản án. <b>v2 DEVELOPER</b> (máy Mac, off 99%) — build index + fine-tune.</p>
+            <p><span class="tag t-dec">RERANK KHÔNG BAO GIỜ LIVE</span> Server không GPU ⇒ rerank chỉ là công cụ <b>offline</b> trên Mac: log query → bật Mac → rerank batch → đào hard-negative → fine-tune embedder → re-embed → đẩy server. Fine-tune model ⇒ <b>bắt buộc re-embed</b> cả index (vector phải cùng phiên bản model).</p>
+            <p><span class="tag t-data">EVAL (đã giải, không phải blocker)</span> Synthetic: LLM sinh tình tiết từ mỗi bản án → bản án gốc = đáp án đúng → lọc cặp query→relevant → chấm <code>ranx</code> (nDCG@10 / Recall@50) để A/B model &amp; chunk. Thêm gold-set người-duyệt nhỏ chỉ để chốt release.</p>
+            <p><span class="tag t-dec">NỀN HẠ TẦNG</span> Tái dùng phần mềm quản lý corpus đã dựng (<code>manager/</code>: Postgres + FastAPI + React, có CI/CD) làm server-side. Gộp 2 frontend (web admin + app) về <b>1 codebase Tauri 2 bản</b> (admin/judge).</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">⑲ E0–E1 · Schema + Chunking</span>
+          <h3>Chunk đều ~450 token, KHÔNG cắt theo header (vì doc dài lệch hẳn)</h3>
+          <div class="card">
+            <p><span class="tag t-dec">E0 SCHEMA</span> <code>CREATE EXTENSION vector/unaccent/pg_trgm</code> + bảng <code>chunks</code>(doc_id, section, chunk_index, chunk_text, <code>embedding halfvec(1024)</code>, <code>tsv</code>) + cột <code>doc_type</code> trên documents. GIN index trên tsv.</p>
+            <p><span class="tag t-data">VẤN ĐỀ ĐỘ DÀI</span> Cắt theo header luật (NỘI DUNG VỤ ÁN / NHẬN ĐỊNH / QUYẾT ĐỊNH) cho chunk <b>rất lệch</b>: bản án dài có mục "Nhận định" vài nghìn token, quyết định ngắn thì cả doc &lt; 1 mục. Embedding kém khi chunk không đều.</p>
+            <p><span class="tag t-dec">CÁCH (chốt)</span> <code>chunk.py</code>: chunk <b>đều ~450 tok</b> (đóng-gói theo đoạn văn, overlap 67, gộp mẩu &lt; 40). Header chỉ dùng để <b>gắn nhãn <code>section</code> + làm ranh giới mềm</b>, KHÔNG làm đơn vị chunk. Phân loại <code>doc_type</code> (ban_an / quyet_dinh) bằng tiêu đề.</p>
+            <p><span class="tag t-data">KẾT QUẢ</span> 33.723 doc sạch (clean+minor; bỏ 681 reocr) → <b>357.104 chunk</b> · ~10,6 chunk/doc · doc_type: <b>quyết định 17.519 · bản án 16.204</b>.</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">⑳ E2 · Embed + HNSW</span>
+          <h3>Embed fp32 qua đêm (caffeinate) + dựng index — bẫy /dev/shm</h3>
+          <div class="card">
+            <p><span class="tag t-dec">EMBED</span> <code>embed.py</code>: AITeamVN trên <b>MPS</b>, <b>fp32</b> (chọn chất lượng, chấp nhận chạy lâu hơn fp16). Resumable (chỉ embed <code>embedding IS NULL</code>, sort theo độ dài để giảm padding), BATCH 128. Chạy nền qua đêm bằng <code>caffeinate</code> (chống ngủ; lock màn hình vẫn chạy, ĐỪNG đóng nắp/clamshell). 357k chunk xong sau vài giờ.</p>
+            <p><span class="tag t-corr">BẪY — HNSW DiskFull (đính chính)</span> Build index báo <code>could not resize shared memory to 2.1GB: No space left</code> dù host còn 610GB. Thủ phạm: <code>/dev/shm</code> của container Docker mặc định <b>64MB</b>, không đủ cho parallel build. Vá: <code>shm_size: "3gb"</code> trong compose → recreate (data trong named volume còn nguyên) → HNSW build lại <b>62 giây</b>. Thêm fallback đơn-luồng (workers=0) vào <code>embed.py</code>.</p>
+            <p><span class="tag t-data">KẾT QUẢ</span> HNSW <code>halfvec_cosine_ops</code> (m=16, ef_construction=64) ~<b>904MB</b> + tsv GIN 170MB ≈ <b>1,1GB index</b>. Search cosine verified (query chunk → trả chính nó dist 0 + chunk cùng tòa).</p>
+          </div>
+        </div>
+
+        <div class="entry">
+          <span class="ph">㉑ E3 · Search router (hybrid)</span>
+          <h3>API tìm bản án tương tự — RRF + max-pool, tách khỏi router admin</h3>
+          <div class="card">
+            <p><span class="tag t-dec">CÁCH</span> <code>manager/backend/search.py</code> (<code>POST /api/search</code>, tách khỏi endpoint admin theo mô hình 2-bản). SQL CTE: <b>dense</b> (HNSW <code>&lt;=&gt;</code> top-k) + <b>lex</b> (<code>ts_rank_cd</code> top-k) → <b>RRF k=60</b> → <b>max-pool về bản án</b> (chunk khớp nhất mỗi doc) → join metadata + snippet → top-N. Nhận <code>{query, vector?}</code>: client gửi vector (production); thiếu vector thì server lazy-load model (chỉ dev — image production nhẹ, không torch → báo 501).</p>
+            <p><span class="tag t-corr">BẪY (đã vá)</span> <code>($5 IS NULL ...)</code> với param NULL → Postgres <code>AmbiguousParameter</code> không suy được kiểu → cast <code>::text</code>. RRF hay <b>hòa điểm</b> (chunk hạng-1 một nhánh = 1/61) → thêm tiebreak <code>doc_id</code> cho ổn định (eval reproducible).</p>
+            <p><span class="tag t-data">VERIFY</span> "tranh chấp hợp đồng tín dụng, trả nợ gốc/lãi" → 6/6 bản án tín dụng đúng chủ đề. Lọc <code>doc_type=quyet_dinh</code> → 4/4 quyết định phá sản. Đường production (client gửi vector) chạy không cần model ở server.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <h4 class="sec">Cấu hình chốt (Phiên 2)</h4>
+      <div class="kv">
+        <div>Model embedding</div><div><code>AITeamVN/Vietnamese_Embedding</code> (BGE-M3 fine-tune luật VN) · 1024-dim · MRR@10 0,818 · Apache-2.0 · case-sensitive</div>
+        <div>Chunking</div><div><code>manager/chunk.py</code>: đều ~450 tok · overlap 67 · gộp &lt;40 · header chỉ gắn nhãn section · 357.104 chunk / 33.723 doc</div>
+        <div>Embed</div><div><code>manager/embed.py</code>: MPS · <b>fp32</b> · resumable · BATCH 128 · chạy đêm qua <code>caffeinate</code> · $0 không cloud</div>
+        <div>Index</div><div>pgvector <code>halfvec(1024)</code> HNSW <code>cosine_ops</code> m=16/ef_c=64 (~904MB) + tsv GIN <code>simple+unaccent</code> (170MB) ≈ 1,1GB</div>
+        <div>Search</div><div><code>manager/backend/search.py</code>: dense + BM25 → RRF k=60 → max-pool về bản án → top-N · <code>hnsw.ef_search=100</code> · lọc doc_type</div>
+        <div>Kiến trúc</div><div>app 2 bản (judge/dev) · client embed query · server 16GB no-GPU hybrid-only · rerank+fine-tune OFFLINE trên Mac → re-embed → đẩy server</div>
+        <div>DB</div><div>Postgres 16 + pgvector 0.8.2 (Docker, cổng 5433, named volume <code>legal_pgdata</code>, <code>shm_size 3gb</code> cho HNSW build)</div>
+      </div>
+
+      <h4 class="sec">Còn lại trong Phiên 2 — câu hỏi mở</h4>
+      <div class="open">
+        <ul>
+          <li><b>E4 eval</b> — dựng harness: sinh synthetic query → chấm <code>ranx</code> nDCG@10/Recall@50 → A/B AITeamVN vs bge-m3, chunk 450 vs khác.</li>
+          <li><b>Deploy</b> — docker-compose production + Caddy (TLS) cho server 16GB; chuyển index Mac→server bằng <code>pg_dump</code>.</li>
+          <li><b>App Tauri</b> — embed query client-side bằng <b>ONNX + ort + tokenizers</b> (model export từ AITeamVN); trích text từ PDF query; auth/license cho server trả phí.</li>
+          <li><b>Publish model</b> — script Mac→HuggingFace sau mỗi vòng fine-tune (đã cân nhắc CI/CD HF).</li>
+          <li><b>Privacy</b> — query rời thiết bị → ẩn danh log + TLS (data tòa án).</li>
+        </ul>
+      </div>
     </div>
   </section>
 

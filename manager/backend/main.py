@@ -14,6 +14,7 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 os.chdir(REPO)                                   # để legacy_decode/utils đọc data/ đúng
 sys.path.insert(0, REPO)                          # utils, legacy_decode, vni_decode
 sys.path.insert(0, os.path.join(REPO, "manager"))  # ingest
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # search router
 
 import psycopg
 from psycopg.rows import dict_row
@@ -30,6 +31,9 @@ PDF_DIR = os.path.join(REPO, "data", "legal-data")
 app = FastAPI(title="Legal Corpus Manager")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
+
+from search import router as search_router   # E3: hybrid search (app thẩm phán)
+app.include_router(search_router)
 
 
 def _q(sql, params=(), one=False, write=False):
