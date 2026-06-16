@@ -138,9 +138,9 @@ export default function Search() {
             <option value="ban_an">Bản án</option>
             <option value="quyet_dinh">Quyết định</option>
           </select>
-          <label className="topk">Số bản án: <b>{top}</b>
-            <input type="range" min="3" max="10" value={top}
-                   onChange={e => setTop(Number(e.target.value))} />
+          <label className="topk">Số bản án:
+            <input type="number" min="1" max="10" value={top}
+                   onChange={e => setTop(Math.max(1, Math.min(10, Number(e.target.value) || 1)))} />
           </label>
           <button type="submit" className="primary" disabled={loading || !query.trim()}>
             {loading ? 'Đang tìm…' : '🔍 Tìm vụ tương tự'}
