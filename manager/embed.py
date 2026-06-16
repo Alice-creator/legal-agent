@@ -27,15 +27,24 @@ def _fmt(vec):
 
 
 def build_hnsw(conn):
+    # parallel cần /dev/shm lớn (docker-compose đặt shm_size 3gb). Nếu shm nhỏ ->
+    # DiskFull -> fallback đơn luồng (workers=0, không dùng shared-mem).
     print("embed xong → build HNSW (halfvec_cosine_ops)...", flush=True)
-    t = time.time()
-    with conn.cursor() as cur:
-        cur.execute("SET maintenance_work_mem='2GB'")
-        cur.execute("SET max_parallel_maintenance_workers=4")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_hnsw ON chunks "
-                    "USING hnsw (embedding halfvec_cosine_ops) WITH (m=16, ef_construction=64)")
-    conn.commit()
-    print(f"HNSW xong sau {(time.time()-t)/60:.1f} phút.", flush=True)
+    for workers in (4, 0):
+        t = time.time()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET maintenance_work_mem='2GB'")
+                cur.execute(f"SET max_parallel_maintenance_workers={workers}")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_hnsw ON chunks "
+                            "USING hnsw (embedding halfvec_cosine_ops) WITH (m=16, ef_construction=64)")
+            conn.commit()
+            print(f"HNSW xong sau {(time.time()-t)/60:.1f} phút (workers={workers}).", flush=True)
+            return
+        except psycopg.errors.DiskFull:
+            conn.rollback()
+            print("  /dev/shm nhỏ → thử lại đơn luồng (workers=0)...", flush=True)
+    print("HNSW build THẤT BẠI (tăng shm_size cho container).", flush=True)
 
 
 def main(limit=None):

@@ -7,6 +7,7 @@ services:
     image: pgvector/pgvector:pg16
     container_name: legal_db
     restart: unless-stopped
+    shm_size: "3gb"          # parallel HNSW build cần shared-mem lớn (mặc định 64MB → DiskFull)
     environment:
       POSTGRES_DB: legal
       POSTGRES_USER: legal
