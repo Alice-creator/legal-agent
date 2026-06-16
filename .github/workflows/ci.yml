@@ -4,9 +4,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+  packages: write          # push image lên GHCR
+
 jobs:
-  backend-health:
-    name: Build backend image + health check
+  backend:
+    name: Build + test + push backend image
     runs-on: ubuntu-latest
     services:
       db:
@@ -23,19 +27,33 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Image name (lowercase cho GHCR)
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr 'A-Z' 'a-z')-backend" >> "$GITHUB_ENV"
+
       - name: Apply schema
         run: PGPASSWORD=legal psql -h localhost -U legal -d legal -f manager/schema.sql
 
-      - name: Build backend image
-        run: docker build -t legal-backend -f manager/backend/Dockerfile .
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Run backend
+      # Build (load để chạy thử). Lần đầu chậm (tải torch CPU + bake model ~2GB);
+      # các lần sau dùng GHA cache nên nhanh.
+      - name: Build image (load)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: manager/backend/Dockerfile
+          load: true
+          tags: legal-backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # LAZY_EMBED=1 -> bỏ nạp model lúc startup -> boot nhanh, chỉ test app boot + DB.
+      - name: Run + health check
         run: |
           docker run -d --name be --network host \
-            -e PG_DSN=postgresql://legal:legal@localhost:5432/legal legal-backend
-
-      - name: Health check (/health -> 200, db ok)
-        run: |
+            -e PG_DSN=postgresql://legal:legal@localhost:5432/legal \
+            -e LAZY_EMBED=1 legal-backend:test
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8000/health 2>/dev/null | grep -q '"status":"ok"'; then
               echo "✓ health OK:"; curl -s http://localhost:8000/health; echo; exit 0
@@ -43,3 +61,24 @@ jobs:
             sleep 2
           done
           echo "✗ health FAILED — backend logs:"; docker logs be; exit 1
+
+      # Chỉ push khi lên main hoặc tag (không push cho PR / nhánh khác).
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push lên GHCR (latest + sha)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: manager/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha

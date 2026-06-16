@@ -1,0 +1,36 @@
+# Deploy server (Ubuntu 16GB no-GPU). Server chỉ cần:
+#   docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
+# backend KÉO image build sẵn từ GHCR (đã bake model -> chạy ngay). DB pgvector.
+# LƯU Ý: phải nạp INDEX vào DB trước (pg_dump documents+chunks từ Mac -> restore vào
+# volume legal_pgdata). Caddy/TLS thêm sau (đặt trước backend).
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    shm_size: "3gb"
+    environment:
+      POSTGRES_DB: legal
+      POSTGRES_USER: legal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legal}
+    volumes:
+      - legal_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legal -d legal"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: ghcr.io/alice-creator/legal-agent-backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_DSN: postgresql://legal:${POSTGRES_PASSWORD:-legal}@db:5432/legal
+      # EMBED_MODEL đã bake trong image; eager-load lúc startup (bỏ qua bằng LAZY_EMBED=1)
+    ports:
+      - "8000:8000"
+
+volumes:
+  legal_pgdata:
