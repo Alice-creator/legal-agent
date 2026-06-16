@@ -4,7 +4,8 @@ import { api } from '../api.js'
 
 const TYPE = { ban_an: 'Bản án', quyet_dinh: 'Quyết định' }
 const N_CTX = 6                       // số nguồn đưa cho LLM
-const GMODEL = 'gemini-2.5-flash'
+const GMODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']   // overload thì fallback
+const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // Tóm tắt do CHÍNH MÁY USER gọi Gemini bằng key riêng của họ (BYOK, lưu localStorage).
 // Không qua server mình → server chỉ dense-retrieve, không giữ key, không tốn quota.
@@ -37,6 +38,25 @@ export default function Search() {
     localStorage.setItem('gemini_key', k); setGkey(k); setKeyInput(''); setEditKey(false)
   }
 
+  // Gọi Gemini với retry (503/429/5xx là tạm thời, phía Google) + fallback model.
+  const fetchGemini = async (body) => {
+    for (const model of GMODELS) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${gkey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        if (res.ok && res.body) return res
+        const status = res.status
+        if ([400, 401, 403].includes(status)) {        // key/request sai — đừng retry
+          throw new Error(`${status} — kiểm tra lại API key. ${(await res.text()).slice(0, 150)}`)
+        }
+        setAnswer(`⏳ Gemini đang bận (${status}) — thử lại… [${model}, lần ${attempt}]`)
+        await sleep(900 * attempt)
+      }
+    }
+    throw new Error('Gemini quá tải / hết quota sau nhiều lần thử. Bấm "↻ Tạo lại" sau ít phút.')
+  }
+
   const streamAnswer = async (q, results) => {
     if (!gkey) { setAnswer('⚠️ Chưa có Gemini API key — nhập ở trên để bật tóm tắt AI.'); return }
     setAnswer(''); setGenerating(true)
@@ -48,12 +68,8 @@ export default function Search() {
         contents: [{ role: 'user', parts: [{ text:
           `TÌNH TIẾT VỤ ĐANG XỬ:\n${q}\n\nCÁC BẢN ÁN/QUYẾT ĐỊNH TƯƠNG TỰ:\n${ctx}` }] }],
       }
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GMODEL}:streamGenerateContent?alt=sse&key=${gkey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (!res.ok || !res.body) {
-        setAnswer(`(Gemini lỗi ${res.status}: ${(await res.text()).slice(0, 200)})`); return
-      }
+      const res = await fetchGemini(body)
+      setAnswer('')
       const reader = res.body.getReader(); const dec = new TextDecoder()
       let buf = '', acc = ''
       for (;;) {
@@ -132,12 +148,14 @@ export default function Search() {
         </div>
       </form>
 
-      {loading && <p className="muted">Đang tìm kiếm… (lần đầu server nạp model ~30–40s)</p>}
+      {loading && <p className="muted">Đang tìm kiếm…</p>}
       {data?.error && <p className="err">{data.error}</p>}
 
       {(answer || generating) && (
         <div className="answer">
-          <div className="answer-head">✨ Tóm tắt AI {generating && <span className="muted">— đang viết…</span>}</div>
+          <div className="answer-head">✨ Tóm tắt AI {generating
+            ? <span className="muted">— đang viết…</span>
+            : data?.results && <a className="retry" onClick={() => streamAnswer(data.query, data.results)}>↻ Tạo lại</a>}</div>
           <div className="answer-body">{answer || '…'}</div>
           <div className="answer-disclaimer">⚠️ Tóm tắt do AI sinh từ các trích đoạn bên dưới — có thể sai/thiếu. <b>Phải bấm vào bản án gốc để xác minh</b> trước khi dùng.</div>
         </div>

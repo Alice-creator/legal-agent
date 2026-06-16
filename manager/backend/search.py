@@ -26,16 +26,24 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 _model = None
 
 
-def _embed(text):
-    """Lazy-embed query (chỉ dùng dev/test; production thì client gửi vector)."""
+def load_model():
+    """Nạp + warm model embed. Gọi lúc STARTUP (lifespan) để request đầu không phải
+    chờ ~30-40s. Raise nếu sentence-transformers không có (image nhẹ không torch)."""
     global _model
     if _model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _model = SentenceTransformer(os.environ.get("EMBED_MODEL", "AITeamVN/Vietnamese_Embedding"))
-        except Exception:
-            raise HTTPException(501, "server không có model embed — client phải gửi 'vector'")
-    return _model.encode([text], normalize_embeddings=True)[0].tolist()
+        from sentence_transformers import SentenceTransformer
+        m = SentenceTransformer(os.environ.get("EMBED_MODEL", "AITeamVN/Vietnamese_Embedding"))
+        m.encode(["khởi động"], normalize_embeddings=True)   # warm graph
+        _model = m
+    return _model
+
+
+def _embed(text):
+    try:
+        m = load_model()
+    except Exception:
+        raise HTTPException(501, "server không có model embed — client phải gửi 'vector'")
+    return m.encode([text], normalize_embeddings=True)[0].tolist()
 
 
 def _fmt(vec):

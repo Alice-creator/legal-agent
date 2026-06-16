@@ -28,12 +28,29 @@ import legacy_decode, vni_decode    # fix_text()
 DSN = os.environ.get("PG_DSN", "postgresql://legal:legal@localhost:5433/legal")
 PDF_DIR = os.path.join(REPO, "data", "legal-data")
 
-app = FastAPI(title="Legal Corpus Manager")
+from contextlib import asynccontextmanager
+import search   # search router + load_model (server tự embed query)
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # Nạp sẵn model embed lúc khởi động → request tìm kiếm đầu tiên không chờ ~30-40s.
+    # Tắt bằng LAZY_EMBED=1 (dev muốn restart nhanh). Lỗi nạp -> server vẫn chạy
+    # (request cần embed sẽ trả 501), không làm sập startup.
+    if not os.environ.get("LAZY_EMBED"):
+        try:
+            print("nạp sẵn model embed...", flush=True)
+            search.load_model()
+            print("model embed sẵn sàng.", flush=True)
+        except Exception as ex:
+            print(f"CẢNH BÁO: không nạp được model embed ({str(ex)[:120]})", flush=True)
+    yield
+
+
+app = FastAPI(title="Legal Corpus Manager", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
-
-from search import router as search_router   # E3: hybrid search (app thẩm phán)
-app.include_router(search_router)
+app.include_router(search.router)   # search router (app thẩm phán)
 
 
 def _q(sql, params=(), one=False, write=False):
