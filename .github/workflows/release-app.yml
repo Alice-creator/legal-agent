@@ -1,0 +1,71 @@
+name: release-app
+
+# Build app Tauri cho macOS + Windows + Linux song song trên runner tương ứng
+# (không cross-compile được), rồi gom vào 1 GitHub Release (draft) để thẩm phán tải.
+# Kích hoạt: push tag v* (vd v0.1.0) hoặc chạy tay (workflow_dispatch).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # tauri-action tạo GitHub Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest        # 1 .dmg chạy cả Intel + Apple Silicon
+            args: "--target universal-apple-darwin"
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: ubuntu-22.04         # .AppImage + .deb (webkit2gtk-4.1)
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest       # .exe (NSIS) + .msi
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: manager/frontend/src-tauri
+
+      - name: Linux build deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend deps
+        working-directory: manager/frontend
+        run: npm ci
+
+      - name: Build app + tạo Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # URL backend nhúng vào app. Đặt ở repo Settings > Variables (Actions) khi đã
+          # có server thật. Rỗng => app gọi '/api' tương đối (chỉ đúng nếu cùng host).
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+        with:
+          projectPath: manager/frontend
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "Legal Search ${{ github.ref_name }}"
+          releaseDraft: true
+          releaseBody: "Tải bản cho HĐH của bạn — macOS (.dmg) · Windows (.exe/.msi) · Linux (.AppImage/.deb)."
