@@ -3,13 +3,22 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 
 const TYPE = { ban_an: 'Bản án', quyet_dinh: 'Quyết định' }
-const N_CTX = 6   // số nguồn đưa cho LLM tóm tắt
+const N_CTX = 6                       // số nguồn đưa cho LLM
+const GMODEL = 'gemini-2.5-flash'
 
-// Trang tìm + tóm tắt án lệ cho THẨM PHÁN.
-// - Search: server (dense) trả {chunk + tên file}, KHÔNG trả full doc.
-// - Tóm tắt: LLM sinh câu trả lời tự nhiên (dev: backend gọi ollama local;
-//   production: app Tauri gọi ollama TẠI MÁY user). Ràng prompt chỉ-dựa-trích-dẫn.
-// - Bấm tên file → mở full nội dung (DocDetail).
+// Tóm tắt do CHÍNH MÁY USER gọi Gemini bằng key riêng của họ (BYOK, lưu localStorage).
+// Không qua server mình → server chỉ dense-retrieve, không giữ key, không tốn quota.
+// Luật nhạy cảm → ràng prompt chỉ-dựa-trích-dẫn + bắt buộc dẫn nguồn + cấm bịa.
+const SYSTEM = `Bạn là trợ lý tra cứu án lệ cho thẩm phán Việt Nam. Người dùng đưa TÌNH TIẾT vụ đang xử và một số ĐOẠN TRÍCH từ các bản án/quyết định tương tự (đánh số [1], [2]...).
+
+Nhiệm vụ: tóm tắt NGẮN GỌN (tiếng Việt) các vụ tìm được liên quan thế nào tới vụ đang xử — điểm CHUNG và KHÁC BIỆT về quan hệ pháp luật tranh chấp và hướng giải quyết — để thẩm phán THAM KHẢO.
+
+QUY TẮC BẮT BUỘC (luật là lĩnh vực nhạy cảm):
+1. CHỈ dùng thông tin có trong các đoạn trích. TUYỆT ĐỐI KHÔNG bịa tình tiết, số liệu, tên, điều luật, kết quả xử không có trong trích dẫn.
+2. Mỗi nhận định phải DẪN NGUỒN [số].
+3. Nếu trích dẫn KHÔNG đủ để kết luận → nói rõ "cần đọc bản án đầy đủ", đừng đoán.
+4. KHÔNG phán quyết / khuyên pháp lý. Chỉ là tóm tắt tham khảo; thẩm phán phải tự đọc bản án gốc.`
+
 export default function Search() {
   const [query, setQuery] = useState('')
   const [docType, setDocType] = useState('')
@@ -18,25 +27,51 @@ export default function Search() {
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [gkey, setGkey] = useState(() => localStorage.getItem('gemini_key') || '')
+  const [keyInput, setKeyInput] = useState('')
+  const [editKey, setEditKey] = useState(false)
+
+  const saveKey = () => {
+    const k = keyInput.trim()
+    if (!k) return
+    localStorage.setItem('gemini_key', k); setGkey(k); setKeyInput(''); setEditKey(false)
+  }
 
   const streamAnswer = async (q, results) => {
+    if (!gkey) { setAnswer('⚠️ Chưa có Gemini API key — nhập ở trên để bật tóm tắt AI.'); return }
     setAnswer(''); setGenerating(true)
     try {
-      const contexts = results.slice(0, N_CTX).map((r, i) => ({ n: i + 1, name: r.filename, chunk: r.chunk }))
-      const res = await fetch('/api/search/answer', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, contexts }),
-      })
-      if (!res.ok || !res.body) { setAnswer(`(không sinh được tóm tắt — ${res.status})`); return }
+      const ctx = results.slice(0, N_CTX)
+        .map((r, i) => `[${i + 1}] ${r.filename}:\n${r.chunk}`).join('\n\n')
+      const body = {
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: 'user', parts: [{ text:
+          `TÌNH TIẾT VỤ ĐANG XỬ:\n${q}\n\nCÁC BẢN ÁN/QUYẾT ĐỊNH TƯƠNG TỰ:\n${ctx}` }] }],
+      }
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GMODEL}:streamGenerateContent?alt=sse&key=${gkey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!res.ok || !res.body) {
+        setAnswer(`(Gemini lỗi ${res.status}: ${(await res.text()).slice(0, 200)})`); return
+      }
       const reader = res.body.getReader(); const dec = new TextDecoder()
-      let acc = ''
+      let buf = '', acc = ''
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
-        acc += dec.decode(value, { stream: true }); setAnswer(acc)
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n'); buf = lines.pop()
+        for (const line of lines) {
+          const s = line.trim()
+          if (!s.startsWith('data:')) continue
+          try {
+            const t = JSON.parse(s.slice(5).trim())?.candidates?.[0]?.content?.parts?.[0]?.text
+            if (t) { acc += t; setAnswer(acc) }
+          } catch { /* dòng SSE chưa trọn */ }
+        }
       }
     } catch (e) {
-      setAnswer('(lỗi sinh tóm tắt: ' + e + ')')
+      setAnswer('(lỗi gọi Gemini: ' + e + ')')
     } finally { setGenerating(false) }
   }
 
@@ -55,13 +90,26 @@ export default function Search() {
       if (r.results?.length) streamAnswer(query, r.results)
     } catch (err) {
       setData({ error: String(err) })
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   return (
     <div className="search-page">
+      <div className="keybar">
+        {gkey && !editKey ? (
+          <span className="muted">🔑 Đã lưu Gemini key (trên máy bạn) ·
+            <a onClick={() => setEditKey(true)}> đổi</a></span>
+        ) : (
+          <>
+            <input type="password" placeholder="Dán Gemini API key…" value={keyInput}
+                   onChange={e => setKeyInput(e.target.value)} />
+            <button onClick={saveKey} disabled={!keyInput.trim()}>Lưu</button>
+            <span className="muted">key chỉ lưu trên máy bạn ·
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"> lấy key free</a></span>
+          </>
+        )}
+      </div>
+
       <p className="muted">Dán <b>tình tiết vụ án</b> đang xử → tìm bản án/quyết định tương tự + tóm tắt AI để tham khảo.</p>
 
       <form onSubmit={run} className="search-form">

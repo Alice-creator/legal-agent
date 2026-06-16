@@ -18,10 +18,7 @@ import os
 import psycopg
 from psycopg.rows import dict_row
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
-ANSWER_MODEL = os.environ.get("ANSWER_MODEL", "qwen2.5:14b")
 
 DSN = os.environ.get("PG_DSN", "postgresql://legal:legal@localhost:5433/legal")
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -85,42 +82,5 @@ def search(req: SearchReq):
         rows = conn.execute(_SQL, params).fetchall()
     return {"query": req.query, "count": len(rows), "results": rows}
 
-
-# --- Sinh câu trả lời tự nhiên (RAG generation) ---
-# DEV PROTOTYPE: endpoint này gọi LOCAL ollama để demo UX. PRODUCTION: app Tauri tự
-# gọi ollama TẠI MÁY USER (server 16GB no-GPU KHÔNG chạy LLM) — prompt + luồng y hệt.
-# Luật nhạy cảm → prompt ràng buộc CHỈ-dựa-trích-dẫn, bắt buộc dẫn nguồn, cấm bịa.
-_SYSTEM = """Bạn là trợ lý tra cứu án lệ cho thẩm phán Việt Nam. Người dùng đưa TÌNH TIẾT vụ đang xử và một số ĐOẠN TRÍCH từ các bản án/quyết định tương tự đã tìm được (đánh số [1], [2]...).
-
-Nhiệm vụ: tóm tắt NGẮN GỌN (tiếng Việt) các vụ tìm được liên quan thế nào tới vụ đang xử — điểm CHUNG và KHÁC BIỆT về quan hệ pháp luật tranh chấp và hướng giải quyết — để thẩm phán THAM KHẢO.
-
-QUY TẮC BẮT BUỘC (luật là lĩnh vực nhạy cảm):
-1. CHỈ dùng thông tin có trong các đoạn trích. TUYỆT ĐỐI KHÔNG bịa tình tiết, số liệu, tên, điều luật, hay kết quả xử không xuất hiện trong trích dẫn.
-2. Mỗi nhận định phải DẪN NGUỒN [số] tương ứng.
-3. Nếu các đoạn trích KHÔNG đủ để kết luận → nói rõ "cần đọc bản án đầy đủ", đừng đoán.
-4. KHÔNG đưa ra phán quyết hay lời khuyên pháp lý. Đây chỉ là tóm tắt tham khảo; thẩm phán phải tự đọc bản án gốc."""
-
-
-class AnswerReq(BaseModel):
-    query: str
-    contexts: list[dict] = []   # [{n, name, chunk}] — các nguồn từ /api/search
-
-
-@router.post("/answer")
-def answer(req: AnswerReq):
-    try:
-        import ollama
-        client = ollama.Client()   # localhost:11434
-    except Exception:
-        raise HTTPException(501, "không có ollama local (dev-only). Production: client tự sinh.")
-    ctx = "\n\n".join(f"[{c.get('n')}] {c.get('name')}:\n{c.get('chunk', '')}"
-                      for c in req.contexts)
-    msgs = [{"role": "system", "content": _SYSTEM},
-            {"role": "user", "content":
-             f"TÌNH TIẾT VỤ ĐANG XỬ:\n{req.query}\n\nCÁC BẢN ÁN/QUYẾT ĐỊNH TƯƠNG TỰ:\n{ctx}"}]
-
-    def gen():
-        for part in client.chat(model=ANSWER_MODEL, messages=msgs, stream=True):
-            yield part["message"]["content"]
-
-    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
+# Sinh câu trả lời (RAG generation) KHÔNG ở server: app tự gọi Gemini bằng key của
+# user (lưu máy user). Server chỉ dense-retrieve, không đụng LLM/key. Xem frontend.
