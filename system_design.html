@@ -39,13 +39,14 @@
 
   <div class="kicker">🏗️ Thiết kế hệ thống + Deploy</div>
   <h1>Legal Agent — kiến trúc production</h1>
-  <p class="sub">Chốt: <b>App v1 = Tauri</b> (tải về, nhẹ) · <b>Model host = HuggingFace</b> · <b>Server = Ubuntu 16GB no-GPU</b> (Docker) · client-embed, server hybrid-only, dev/Mac lo build+fine-tune.</p>
+  <p class="sub">Chốt: <b>1 codebase React + 1 backend FastAPI → 2 bản Tauri</b> — v1 THẨM PHÁN (search-only, live) &amp; v2 ADMIN/DEV (quản trị corpus + pipeline, chạy trên Mac) · <b>Model host = HuggingFace</b> · <b>Server = Ubuntu 16GB no-GPU</b> (Docker) · client-embed, server hybrid-only, fine-tune offline trên Mac.</p>
 
-  <div class="tldr"><b>Bức tranh:</b> 4 thành phần — 🍎 <b>Máy Mac (v2 dev)</b> dựng index + fine-tune → publish MODEL lên 🤗 <b>HuggingFace</b> + push INDEX sang ☁️ <b>Server</b>. 💻 <b>App v1 (Tauri)</b> tải model từ HF, embed query tại máy, gửi <code>{vector+text}</code> lên Server (Postgres+pgvector + FastAPI), nhận bản án. Server log query → vòng cải tiến trên Mac.</p></div>
+  <div class="tldr"><b>Bức tranh:</b> <b>1 codebase</b> (React UI + backend FastAPI, <code>manager/</code>) → build ra <b>2 bản Tauri</b>. 🍎 <b>Máy Mac</b> chạy <b>v2 ADMIN</b> (Tauri mode admin) — quản trị corpus (Dashboard/DocList/DocDetail) + điều khiển pipeline (chunk/embed/build-index/rerank/fine-tune/re-embed) qua Postgres+FastAPI <b>LOCAL</b> trên Mac → publish MODEL lên 🤗 <b>HuggingFace</b> + push INDEX (pg_dump) sang ☁️ <b>Server</b>. 💻 <b>v1 THẨM PHÁN</b> (Tauri mode judge, search-only) tải model từ HF, embed query tại máy, gửi <code>{vector+text}</code> lên Server (Postgres+pgvector + FastAPI), nhận bản án. Server log query → vòng cải tiến chạy trên app admin ở Mac.</div>
+  <p class="meta-row"><b>Trạng thái build (Phiên 2):</b> E0 schema ✓ · E1 chunk ✓ · E2 embed fp32 + HNSW ✓ · E3 search router ✓ — đã index <b>33.723 doc sạch</b> (bỏ 681 reocr) → <b>357.104 chunk</b> (~10,6/doc · quyết định 17.519 / bản án 16.204); pgvector <code>halfvec(1024)</code> HNSW cosine ~904MB + tsv GIN 170MB ≈ <b>1,1GB</b>. KẾ: E4 (eval synthetic + ranx).</p>
 
   <h2>① Toàn cảnh production</h2>
   <div class="canvas">
-    <div class="cap">4 thành phần · 3 luồng (build/publish · live · cải tiến)</div>
+    <div class="cap">1 codebase → 2 bản Tauri · 4 thành phần · 3 luồng (build/publish · live · cải tiến)</div>
     <svg viewBox="0 0 1000 480" style="width:100%;height:auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
       <defs>
         <pattern id="dt" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#e2dcca"/></pattern>
@@ -84,14 +85,14 @@
 
       <g fill="#1a1d24" font-weight="700" font-size="14">
         <text x="245" y="98" text-anchor="middle">🤗 HuggingFace</text>
-        <text x="720" y="92" text-anchor="middle">🍎 Máy Mac (v2 · dev)</text>
+        <text x="720" y="92" text-anchor="middle">🍎 Mac · v2 ADMIN (Tauri)</text>
         <text x="730" y="345" text-anchor="middle">☁️ Server · Ubuntu 16GB</text>
-        <text x="210" y="345" text-anchor="middle">💻 App v1 (Tauri)</text>
+        <text x="210" y="345" text-anchor="middle">💻 v1 THẨM PHÁN (Tauri)</text>
       </g>
       <g fill="#5b6470" font-size="11" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">
         <text x="245" y="120">MODEL (versioned)</text>
-        <text x="720" y="114">build index · fine-tune</text>
-        <text x="720" y="132">off 99% · bật khi cần</text>
+        <text x="720" y="114">admin app: corpus + pipeline</text>
+        <text x="720" y="132">Postgres+FastAPI LOCAL · off 99%</text>
         <text x="730" y="372">Postgres+pgvector · FastAPI</text>
         <text x="730" y="390">Caddy · hybrid retrieve</text>
         <text x="730" y="408">log query · no-GPU</text>
@@ -125,7 +126,7 @@
         <path d="M680,108 H738" marker-end="url(#a2)"/>
       </g>
       <g fill="#1a1d24" font-weight="700" font-size="13.5" text-anchor="middle">
-        <text x="115" y="104">🌐 App v1</text>
+        <text x="115" y="104">🌐 v1 THẨM PHÁN</text>
         <text x="335" y="104">Caddy</text>
         <text x="580" y="104">FastAPI</text>
         <text x="850" y="104">Postgres + pgvector</text>
@@ -143,37 +144,39 @@
   <table>
     <thead><tr><th>Thành phần</th><th>Chạy gì</th><th>Khi nào</th></tr></thead>
     <tbody>
-      <tr><td>🍎 <b>Máy Mac</b> (v2 dev)</td><td>Pipeline Phiên 1 + chunk + embed (build index) · rerank batch + fine-tune (vòng cải tiến) · publish model + push index</td><td>offline, bật khi cần</td></tr>
+      <tr><td>🍎 <b>Mac · v2 ADMIN</b> (Tauri)</td><td>App admin: UI quản trị corpus (Dashboard/DocList/DocDetail) + nút điều khiển pipeline (ingest/chunk/embed/build-index/rerank/fine-tune/re-embed/publish-model/push-index) · nói chuyện Postgres+FastAPI <b>LOCAL</b> trên Mac</td><td>offline, bật khi cần</td></tr>
       <tr><td>🤗 <b>HuggingFace</b></td><td>Host MODEL embed (có version). App tải qua link config khi cài/update</td><td>luôn (CDN của HF)</td></tr>
       <tr><td>☁️ <b>Server Ubuntu 16GB</b></td><td>Caddy (TLS) + FastAPI (hybrid retrieve: ANN+BM25→RRF→max-pool) + Postgres/pgvector (chunks+documents) · log query</td><td>24/7</td></tr>
-      <tr><td>💻 <b>App v1 (Tauri)</b></td><td>Tải model · embed query (CPU) · UI nhập tình tiết/PDF · gửi {vector+text} · hiện bản án</td><td>khi user dùng</td></tr>
+      <tr><td>💻 <b>v1 THẨM PHÁN</b> (Tauri · judge)</td><td>Search-only (KHÔNG admin/rerank) · tải model · embed query (CPU) · UI nhập tình tiết/PDF · gửi {vector+text} · hiện bản án</td><td>khi user dùng</td></tr>
     </tbody>
   </table>
+  <p class="meta-row">⚙️ <b>v1 &amp; v2 = cùng 1 codebase</b>: React (<code>manager/frontend</code>: Dashboard/DocList/DocDetail) + backend FastAPI (<code>manager/backend</code>) — khác nhau ở <b>mode build</b>: v1 judge (trỏ server từ xa, search-only) · v2 admin (trỏ Postgres+FastAPI local, full quản trị). Server reuse chính <code>manager/backend</code> (router <code>search.py</code>). KHÔNG phải web + app riêng.</p>
 
   <h2>Checklist deploy</h2>
   <p class="sub" style="margin:2px 0 8px"><b>Server (1 lần):</b></p>
   <ol>
     <li>Provision Ubuntu 16GB + cài Docker + Docker Compose.</li>
-    <li><code>docker-compose</code>: <code>db</code> (pgvector/pgvector:pg16) + <code>backend</code> (FastAPI/uvicorn, reuse <code>manager/backend</code>) + <code>caddy</code> (reverse proxy + auto-TLS).</li>
-    <li>Đưa INDEX lên: <code>pg_dump</code> bảng <code>documents</code> + <code>chunks</code> (đã embed) từ Mac → <code>scp</code> → restore vào Postgres server. (Server không-GPU nên KHÔNG embed lại — chỉ nhận vector dựng sẵn.)</li>
+    <li><code>docker-compose</code>: <code>db</code> (pgvector/pgvector:pg16, <code>shm_size 3gb</code>) + <code>backend</code> (FastAPI/uvicorn — router hybrid <code>manager/backend/search.py</code> đã có, POST <code>/api/search</code>; image nhẹ KHÔNG torch, client gửi sẵn vector) + <code>caddy</code> (reverse proxy + auto-TLS).</li>
+    <li>Đưa INDEX lên: <code>pg_dump</code> bảng <code>documents</code> + <code>chunks</code> (đã embed, ~1,1GB) từ Mac → <code>scp</code> → restore vào Postgres server. Ưu tiên dump nguyên HNSW/GIN index để KHỎI build lại; nếu REINDEX trên server thì nhớ <code>shm_size 3gb</code> (mặc định /dev/shm 64MB → DiskFull). Server không-GPU nên KHÔNG embed lại — chỉ nhận vector dựng sẵn.</li>
     <li>Domain → Caddy (HTTPS tự động). Mở chỉ :443.</li>
     <li>Bật log query (ghi bảng <code>query_log</code>) cho vòng cải tiến v2.</li>
   </ol>
-  <p class="sub" style="margin:8px 0 8px"><b>App v1 (mỗi lần phát hành):</b></p>
+  <p class="sub" style="margin:8px 0 8px"><b>App — 2 bản build từ 1 codebase (mỗi lần phát hành):</b></p>
   <ol>
     <li>Export model AITeamVN → <b>ONNX</b> · publish lên HuggingFace (có version).</li>
-    <li>Build Tauri cho 3 OS (.exe / .dmg / .AppImage); config trỏ HF model + endpoint server.</li>
-    <li>App lần đầu chạy: tải model từ HF (~1-2GB) → cache. Update model = tải bản mới theo version.</li>
+    <li><b>v1 THẨM PHÁN (mode judge):</b> build Tauri 3 OS (.exe / .dmg / .AppImage) · config trỏ HF model + endpoint server từ xa · UI search-only.</li>
+    <li><b>v2 ADMIN/DEV (mode admin):</b> build Tauri cho macOS · trỏ Postgres+FastAPI <b>LOCAL</b> · bật UI quản trị corpus + nút điều khiển pipeline (build/rerank/fine-tune).</li>
+    <li>App v1 lần đầu chạy: tải model từ HF (~1-2GB) → cache. Update model = tải bản mới theo version.</li>
   </ol>
 
   <h2>⚠️ Hạng mục kỹ thuật cần giải khi build</h2>
   <div class="open"><b>Embed query trong Tauri (CPU):</b> export AITeamVN → ONNX, chạy bằng <code>ort</code> (onnxruntime Rust) + <code>tokenizers</code> (Rust). 1 query trên CPU ~1-3s, OK. Đây là phần khó nhất của v1.</div>
   <div class="open"><b>Trích xuất query-PDF:</b> PDF text → PyMuPDF (nhẹ, nhúng được). PDF scan → cần OCR (nặng) → đẩy server hoặc bảo user dán text. Khác với kho (Surya offline).</div>
   <div class="open"><b>Auth / license server trả phí:</b> nhiều user + server tính phí → cần token/API-key gắn app để chặn truy cập trái phép. Quyết định cơ chế license.</div>
-  <div class="open"><b>Chuyển index Mac→Server:</b> pg_dump/restore (lần đầu + mỗi khi re-embed). Cân nhắc dump chỉ <code>chunks</code>+<code>documents</code>, hoặc logical replication nếu cập nhật thường.</div>
+  <div class="open"><b>Chuyển index Mac→Server:</b> pg_dump/restore (lần đầu + mỗi khi fine-tune: fine-tune đổi model ⇒ <b>BẮT BUỘC re-embed CẢ index</b> vì vector phải cùng phiên bản model ⇒ pg_dump lại). Cân nhắc dump chỉ <code>chunks</code>+<code>documents</code>, hoặc logical replication nếu cập nhật thường.</div>
   <div class="open"><b>Riêng tư:</b> query rời máy lên server (cho BM25+log). Court data → cân nhắc ẩn danh log + TLS bắt buộc.</div>
 
-  <p class="meta-row">Nối tiếp Phiên 2: E2 (embed) đang chạy → E3 (endpoint hybrid trong <code>manager/backend</code>) → E4 (eval synthetic) → đóng gói server + Tauri theo blueprint này.</p>
+  <p class="meta-row">Nối tiếp Phiên 2: E0–E3 ✓ (schema · chunk · embed+HNSW · search router <code>manager/backend/search.py</code>) → <b>E4</b> (eval synthetic + ranx) → đóng gói server + <b>2 bản Tauri</b> (v1 judge / v2 admin) theo blueprint này.</p>
 
 </div>
 </body>

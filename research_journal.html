@@ -432,7 +432,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
             <p><span class="tag t-dec">TOPOLOGY (sau nhiều vòng bàn)</span> <b>App tải về, 2 bản</b>: <b>v1 THẨM PHÁN</b> (live 24/7) — máy user embed query (model tải qua link config) → gửi <code>{vector+text}</code> → <b>server 16GB no-GPU</b> làm hybrid-only → trả bản án. <b>v2 DEVELOPER</b> (máy Mac, off 99%) — build index + fine-tune.</p>
             <p><span class="tag t-dec">RERANK KHÔNG BAO GIỜ LIVE</span> Server không GPU ⇒ rerank chỉ là công cụ <b>offline</b> trên Mac: log query → bật Mac → rerank batch → đào hard-negative → fine-tune embedder → re-embed → đẩy server. Fine-tune model ⇒ <b>bắt buộc re-embed</b> cả index (vector phải cùng phiên bản model).</p>
             <p><span class="tag t-data">EVAL (đã giải, không phải blocker)</span> Synthetic: LLM sinh tình tiết từ mỗi bản án → bản án gốc = đáp án đúng → lọc cặp query→relevant → chấm <code>ranx</code> (nDCG@10 / Recall@50) để A/B model &amp; chunk. Thêm gold-set người-duyệt nhỏ chỉ để chốt release.</p>
-            <p><span class="tag t-dec">NỀN HẠ TẦNG</span> Tái dùng phần mềm quản lý corpus đã dựng (<code>manager/</code>: Postgres + FastAPI + React, có CI/CD) làm server-side. Gộp 2 frontend (web admin + app) về <b>1 codebase Tauri 2 bản</b> (admin/judge).</p>
+            <p><span class="tag t-dec">NỀN HẠ TẦNG</span> Tái dùng phần mềm quản lý corpus đã dựng (<code>manager/</code>: Postgres + FastAPI + React, có CI/CD) làm nền chung. Gộp về <b>1 codebase React + 1 backend FastAPI → 2 bản build Tauri</b> (v1 judge: search-only / v2 admin: quản trị corpus + pipeline) — KHÔNG phải web + app riêng.</p>
           </div>
         </div>
 

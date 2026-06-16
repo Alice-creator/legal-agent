@@ -256,9 +256,9 @@
     <div class="card"><div class="q">Embed gì khi 53% doc không có phần "nội dung vụ án"?</div><div class="r">→ section-nếu-có + fallback cả doc</div><div class="w">section-only sẽ làm nửa kho không tìm được</div></div>
     <div class="card"><div class="q">Chunk kiểu gì?</div><div class="r">→ sliding-window ~400-512 tok (15% overlap) + parent-child</div><div class="w">late-chunking bất khả (fine-tune cap 2048 < doc p90 ~8.9k)</div></div>
     <div class="card"><div class="q">cosine hay dot?</div><div class="r">→ L2-norm + cosine</div><div class="w">trên vector chuẩn hoá, dot ≡ cosine; giữ HNSW chuẩn</div></div>
-    <div class="card"><div class="q">vector hay halfvec?</div><div class="r">→ halfvec(1024)</div><div class="w">float16 nửa RAM/disk, gần như không mất recall — sống còn ở prod 8GB</div></div>
+    <div class="card"><div class="q">vector hay halfvec?</div><div class="r">→ halfvec(1024)</div><div class="w">float16 nửa RAM/disk, gần như không mất recall — quan trọng ở server 16GB no-GPU</div></div>
     <div class="card"><div class="q">Hybrid hay dense-only?</div><div class="r">→ hybrid ngay (RRF k=60)</div><div class="w">đã có sẵn tsv; luật cần khớp token chính xác (Điều X, số vụ)</div></div>
-    <div class="card"><div class="q">Reranker giờ chưa?</div><div class="r">→ defer, có điều kiện</div><div class="w">đòn bẩy mạnh nhất NHƯNG khó deploy trên 8GB no-GPU; cần đo</div></div>
+    <div class="card"><div class="q">Reranker giờ chưa?</div><div class="r">→ defer, có điều kiện</div><div class="w">đòn bẩy mạnh nhất NHƯNG khó deploy trên server 16GB no-GPU; cần đo</div></div>
   </div>
 
   <h2>So với plan ban đầu</h2>
@@ -269,7 +269,7 @@
       <tr><td>Chunk</td><td>sliding-window</td><td class="win">+ section-aware + parent-child</td></tr>
       <tr><td>Lưu vector</td><td>vector(1024)</td><td class="win">halfvec(1024)</td></tr>
       <tr><td>Retrieval</td><td>dense cosine</td><td class="win">hybrid dense+BM25 RRF</td></tr>
-      <tr><td>Rerank</td><td>E4 (mặc nhiên)</td><td>defer, có điều kiện (8GB)</td></tr>
+      <tr><td>Rerank</td><td>E4 (mặc nhiên)</td><td>defer + offline trên Mac (server 16GB no-GPU)</td></tr>
       <tr><td>Late chunking</td><td>—</td><td class="vs-cut">bỏ (cap 2048 tok)</td></tr>
       <tr><td>GraphRAG / HyDE / ColBERT</td><td>—</td><td class="vs-cut">bỏ (thừa ở 34k)</td></tr>
       <tr><td>Xương sống (PG/pgvector/HNSW/FastAPI)</td><td colspan="2" style="color:#56d364">✓ research XÁC NHẬN giữ nguyên</td></tr>
@@ -281,9 +281,9 @@
     <div class="ph"><div class="pt">E0 · Bật stack</div><div class="pd"><code>CREATE EXTENSION vector</code> + bảng <code>chunks</code> (doc_id, section, chunk_text, <code>halfvec(1024)</code>, tsv + GIN). Không đổi image.</div></div>
     <div class="ph"><div class="pt">E1 · Tách section + chunk (offline M5)</div><div class="pd">regex bao-dung-dấu nhận 4 header → chunk facts/reasoning nếu có, không thì cả doc · tag bản-án/quyết-định · chỉ bucket clean/minor (tránh rác OCR).</div></div>
     <div class="ph"><div class="pt">E2 · Embed + index (offline M5/MPS)</div><div class="pd">AITeamVN (L2-norm) · build HNSW <code>halfvec_cosine_ops</code> (m=16, ef_construction=64).</div></div>
-    <div class="ph"><div class="pt">E3 · Endpoint hybrid (manager backend)</div><div class="pd">Nhận query <b>text HOẶC PDF</b> (PDF → <code>utils.extract_text</code> Phiên 1) → embed → 1 SQL CTE: ANN top-50 + ts_rank_cd top-50 → RRF(60) → max-pool → dedupe parent. <code>ef_search=80</code>.</div></div>
+    <div class="ph"><div class="pt">E3 · Endpoint hybrid (manager backend)</div><div class="pd">Nhận query <b>text HOẶC PDF</b> (PDF → <code>utils.extract_text</code> Phiên 1) → embed → 1 SQL CTE: ANN top-60 + ts_rank_cd top-60 → RRF(60) → max-pool → dedupe parent. <code>ef_search=100</code> (as-built).</div></div>
     <div class="ph"><div class="pt">E4 · Eval harness — <b>cổng quyết định</b></div><div class="pd">ranx · nDCG@10 / Recall@50 / MRR@10 · ~300-500 query synthetic (Ollama) + 50-100 gold hand-label · A/B model & chunk & hybrid.</div></div>
-    <div class="ph"><div class="pt">E5 · Reranker (có điều kiện)</div><div class="pd">chỉ sau khi E4 cho thấy trần hybrid · A/B AITeamVN/Vietnamese_Reranker vs ViRanker · đo RAM/latency trên server 8GB thật · ngưỡng "không có án tương tự rõ".</div></div>
+    <div class="ph"><div class="pt">E5 · Reranker (có điều kiện)</div><div class="pd">chỉ sau khi E4 cho thấy trần hybrid · A/B AITeamVN/Vietnamese_Reranker vs ViRanker · CHỈ chạy offline trên Mac (server 16GB no-GPU không rerank live) · ngưỡng "không có án tương tự rõ".</div></div>
   </div>
 
   <h2>Rủi ro phải nhớ</h2>
@@ -294,7 +294,7 @@
 
   <h2>👉 2 quyết định cần bạn chốt trước E0</h2>
   <div class="ask">
-    <b>① Prod thật sự là 8GB RAM + không GPU?</b> → quyết định có reranker không + dùng halfvec. Nếu prod mạnh hơn thì reranker vào sớm.<br><br>
+    <b>① Phần cứng prod</b> → <span style="color:#56d364">ĐÃ CHỐT: server 16GB no-GPU + app tải về (client embed).</span> Dùng halfvec; reranker để OFFLINE trên Mac (server không GPU → không rerank live).<br><br>
     <b>② 53% doc Quyết định thủ tục</b> (không có tình tiết vụ án): <b>index + gắn nhãn để lọc</b> (vẫn tìm được khi cần), hay <b>loại hẳn</b> khỏi tìm-theo-tình-tiết? <br><span class="w" style="color:var(--muted);font-size:12px">Đề xuất: index hết + tag, để thẩm phán bật/tắt — linh hoạt hơn loại bỏ.</span><br><br>
     <b>③ Query bằng PDF dài</b> embed thế nào: trích "nội dung vụ án" của query rồi 1 vector, hay chunk query + multi-vector fuse (doc-to-doc)? <br><span class="w" style="color:var(--muted);font-size:12px">Đề xuất: thử (a) trích-facts trước cho đơn giản, để (b) chunk-fuse khi cần độ chính xác cao hơn — cùng dùng splitter Phiên 1.</span>
   </div>
