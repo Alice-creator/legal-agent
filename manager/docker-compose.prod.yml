@@ -1,8 +1,13 @@
-# Deploy server (Ubuntu 16GB no-GPU). Server chỉ cần:
-#   docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
-# backend KÉO image build sẵn từ GHCR (đã bake model -> chạy ngay). DB pgvector.
-# LƯU Ý: phải nạp INDEX vào DB trước (pg_dump documents+chunks từ Mac -> restore vào
-# volume legal_pgdata). Caddy/TLS thêm sau (đặt trước backend).
+# Deploy server (home-lab Ubuntu sau NAT). Trên server:
+#   docker login ghcr.io                      # 1 lần (PAT có read:packages)
+#   cp .env.prod.example .env  && sửa .env     # POSTGRES_PASSWORD + CF_TUNNEL_TOKEN
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# - backend: kéo image GHCR (đã bake model -> chạy ngay), tự embed query + dense retrieve
+# - db: pgvector. PHẢI nạp INDEX trước (pg_dump documents+chunks từ Mac -> restore)
+# - cloudflared: Cloudflare Tunnel -> public HTTPS hostname, KHÔNG mở port/router.
+#   Ingress (hostname -> http://backend:8000) cấu hình ở Cloudflare Zero Trust dashboard.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -29,8 +34,19 @@ services:
     environment:
       PG_DSN: postgresql://legal:${POSTGRES_PASSWORD:-legal}@db:5432/legal
       # EMBED_MODEL đã bake trong image; eager-load lúc startup (bỏ qua bằng LAZY_EMBED=1)
+    # ports chỉ cần khi muốn test trong LAN (http://192.168.2.13:8000). Dùng tunnel
+    # thì cloudflared gọi backend:8000 qua mạng nội bộ compose -> có thể BỎ ports này
+    # cho kín (backend không phơi ra LAN/host).
     ports:
       - "8000:8000"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    depends_on:
+      - backend
+    # chỉ kết nối RA Cloudflare (outbound), không cần mở port nào.
 
 volumes:
   legal_pgdata:
