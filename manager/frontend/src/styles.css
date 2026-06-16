@@ -76,6 +76,9 @@ mark.hq { background: rgba(210,153,34,.45); color: #fff; border-radius: 2px; }
 .search-form textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .search-controls { display: flex; gap: 10px; align-items: center; }
 .search-controls button { margin-left: auto; }
+.search-controls .topk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.search-controls .topk b { color: var(--txt); min-width: 14px; text-align: center; }
+.search-controls .topk input[type=range] { width: 120px; padding: 0; }
 .results { display: flex; flex-direction: column; gap: 10px; }
 .result { display: block; background: var(--panel); border: 1px solid var(--line);
   border-left: 3px solid var(--blue); border-radius: 8px; padding: 11px 14px; color: var(--txt); }

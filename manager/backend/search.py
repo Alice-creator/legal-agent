@@ -71,10 +71,13 @@ LIMIT %(top)s;
 """
 
 
+TOP_MAX = 10                             # trần số bản án trả về (yêu cầu sản phẩm)
+
+
 class SearchReq(BaseModel):
     query: str
     vector: list[float] | None = None   # client-embed; None -> server embed (dev)
-    top: int = 20                        # số bản án trả về
+    top: int = 5                         # số bản án trả về (user chỉnh, clamp <=10)
     doc_type: str | None = None          # lọc: 'ban_an' / 'quyet_dinh' / None=cả hai
 
 
@@ -83,8 +86,9 @@ def search(req: SearchReq):
     if not req.query.strip():
         raise HTTPException(400, "query rỗng")
     vec = req.vector if req.vector is not None else _embed(req.query)
-    cand = max(200, req.top * 12)        # đủ chunk để max-pool ra >= top doc riêng
-    params = {"vec": _fmt(vec), "cand": cand, "doc_type": req.doc_type, "top": req.top}
+    top = max(1, min(req.top, TOP_MAX))  # clamp server-side ≤10 dù client gửi gì
+    cand = max(200, top * 12)            # đủ chunk để max-pool ra >= top doc riêng
+    params = {"vec": _fmt(vec), "cand": cand, "doc_type": req.doc_type, "top": top}
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         conn.execute(f"SET LOCAL hnsw.ef_search = {max(100, cand)}")
         rows = conn.execute(_SQL, params).fetchall()

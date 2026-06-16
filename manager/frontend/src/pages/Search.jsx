@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 
 const TYPE = { ban_an: 'Bản án', quyet_dinh: 'Quyết định' }
-const N_CTX = 6                       // số nguồn đưa cho LLM
 // primary = flash-latest (alias → flash mới nhất, Google tự định tuyến, đỡ 503);
 // fallback = các bản LITE (sẵn sàng cao hơn, quota free rộng hơn) khi quá tải.
 const GMODELS = ['gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
@@ -25,7 +24,7 @@ QUY TẮC BẮT BUỘC (luật là lĩnh vực nhạy cảm):
 export default function Search() {
   const [query, setQuery] = useState('')
   const [docType, setDocType] = useState('')
-  const [top, setTop] = useState(20)
+  const [top, setTop] = useState(5)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [answer, setAnswer] = useState('')
@@ -63,7 +62,7 @@ export default function Search() {
     if (!gkey) { setAnswer('⚠️ Chưa có Gemini API key — nhập ở trên để bật tóm tắt AI.'); return }
     setAnswer(''); setGenerating(true)
     try {
-      const ctx = results.slice(0, N_CTX)
+      const ctx = results
         .map((r, i) => `[${i + 1}] ${r.filename}:\n${r.chunk}`).join('\n\n')
       const body = {
         systemInstruction: { parts: [{ text: SYSTEM }] },
@@ -139,11 +138,10 @@ export default function Search() {
             <option value="ban_an">Bản án</option>
             <option value="quyet_dinh">Quyết định</option>
           </select>
-          <select value={top} onChange={e => setTop(e.target.value)}>
-            <option value={10}>10 kết quả</option>
-            <option value={20}>20 kết quả</option>
-            <option value={50}>50 kết quả</option>
-          </select>
+          <label className="topk">Số bản án: <b>{top}</b>
+            <input type="range" min="3" max="10" value={top}
+                   onChange={e => setTop(Number(e.target.value))} />
+          </label>
           <button type="submit" className="primary" disabled={loading || !query.trim()}>
             {loading ? 'Đang tìm…' : '🔍 Tìm vụ tương tự'}
           </button>
@@ -165,11 +163,11 @@ export default function Search() {
 
       {data?.results && (
         <div className="results">
-          <p className="muted">{data.count} bản án/quyết định gần nhất — nguồn cho tóm tắt: [1]–[{Math.min(N_CTX, data.count)}]:</p>
+          <p className="muted">{data.count} bản án/quyết định gần nhất (nguồn cho tóm tắt: [1]–[{data.count}]):</p>
           {data.results.map((r, i) => (
             <Link key={r.doc_id} to={'/docs/' + r.doc_id} className="result">
               <div className="result-head">
-                <span className="rank">{i < N_CTX ? `[${i + 1}]` : `#${i + 1}`}</span>
+                <span className="rank">[{i + 1}]</span>
                 <span className="score" title="độ tương đồng cosine">{(r.score * 100).toFixed(1)}%</span>
                 <span className={'badge t-' + r.doc_type}>{TYPE[r.doc_type] || r.doc_type}</span>
                 <span className="fname">{r.filename}</span>
