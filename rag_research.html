@@ -77,11 +77,11 @@
   <p class="sub">8 agent · 148 web lookup · grounded vào VN-MTEB, paper retrieval luật VN 2025, model card HF · mục tiêu: chốt pipeline embedding cho ~34k bản án KDTM, chạy <b>LOCAL-$0</b>.</p>
 
   <div class="tldr">
-    <b>Kết luận:</b> giữ nguyên xương sống (Postgres/pgvector · HNSW cosine · chunk · FastAPI manager). Đổi 3 chỗ lớn: ① embed bằng <b>AITeamVN/Vietnamese_Embedding</b> (bge-m3 fine-tune luật, +20đ MRR@10) thay bge-m3 gốc · ② <b>hybrid dense+BM25 (RRF)</b> ngay từ đầu (đã có sẵn cột <code>tsv</code>) · ③ <b>parent-child</b> (search chunk → trả cả bản án). Bỏ late-chunking / GraphRAG / HyDE (thừa hoặc không hợp data).
+    <b>Kết luận:</b> giữ nguyên xương sống (Postgres/pgvector · HNSW cosine · chunk · FastAPI manager). Đổi 3 chỗ lớn: ① embed bằng <b>AITeamVN/Vietnamese_Embedding</b> (bge-m3 fine-tune luật, +20đ MRR@10) thay bge-m3 gốc · ② retrieval <b>dense (HNSW cosine)</b> — thử hybrid+BM25 nhưng <b>E4 chốt dense-primary</b> (BM25 không thêm giá trị đo được) · ③ <b>parent-child</b> (search chunk → trả cả bản án). Bỏ late-chunking / GraphRAG / HyDE (thừa hoặc không hợp data).
   </div>
 
   <h2>Pipeline khuyến nghị</h2>
-  <p class="sub" style="margin:-6px 0 14px">App tải về <b>2 bản</b>: <b>v1 USER</b> (tìm kiếm, live) · <b>v2 DEVELOPER</b> (máy Mac, build + retrain — off 99%). Server 16GB·no-GPU chỉ làm <b>hybrid live</b>; mọi việc GPU (build/fine-tune/rerank) trên máy Mac, offline.</p>
+  <p class="sub" style="margin:-6px 0 14px">App tải về <b>2 bản</b>: <b>v1 USER</b> (tìm kiếm, live) · <b>v2 DEVELOPER</b> (máy Mac, build + retrain — off 99%). Server 16GB·no-GPU chỉ làm <b>dense retrieve live</b>; mọi việc GPU (build/fine-tune/rerank) trên máy Mac, offline.</p>
 
   <div style="background:#f7f4ea;border:1px solid var(--line);border-radius:10px;padding:6px 8px 2px;margin-bottom:14px;overflow-x:auto">
     <div style="font:700 12px/1.4 -apple-system,sans-serif;color:#9a917b;letter-spacing:1px;padding:6px 8px 2px">① v2 · APP DEVELOPER — máy Mac (bật khi cần, off 99%): build kho + vòng cải tiến</div>
@@ -157,7 +157,7 @@
   </div>
 
   <div style="background:#f7f4ea;border:1px solid var(--line);border-radius:10px;padding:6px 8px 2px;margin-bottom:12px;overflow-x:auto">
-    <div style="font:700 12px/1.4 -apple-system,sans-serif;color:#9a917b;letter-spacing:1px;padding:6px 8px 2px">② v1 · LIVE (24/7) — user embed → server hybrid-only</div>
+    <div style="font:700 12px/1.4 -apple-system,sans-serif;color:#9a917b;letter-spacing:1px;padding:6px 8px 2px">② v1 · LIVE (24/7) — user embed → server dense-only</div>
     <svg viewBox="0 0 1200 250" style="width:100%;height:auto;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
       <defs>
         <pattern id="d2" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#e2dcca"/></pattern>
@@ -199,7 +199,7 @@
         <text x="108" y="119">Thẩm phán</text>
         <text x="263" y="119">Trích xuất</text>
         <text x="421" y="119">Embed query</text>
-        <text x="767" y="119">Hybrid retrieve</text>
+        <text x="767" y="119">Dense retrieve</text>
         <text x="995" y="121" font-size="12.5">Bản án tương tự</text>
         <text x="767" y="205" font-size="12">Index · 33k</text>
       </g>
@@ -207,27 +207,27 @@
         <text x="108" y="137">gõ / nộp PDF</text>
         <text x="263" y="137">P1 nếu PDF</text>
         <text x="421" y="137">AITeamVN</text>
-        <text x="767" y="137">ANN + BM25 · RRF</text>
+        <text x="767" y="137">ANN · HNSW cosine</text>
         <text x="995" y="138">xếp hạng</text>
-        <text x="767" y="221">chunks·HNSW·BM25</text>
+        <text x="767" y="221">chunks · HNSW</text>
       </g>
     </svg>
   </div>
 
   <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">
-    <div class="card"><div class="q">v1 · USER (live)</div><div class="w">Client mỏng: tải MODEL · embed query · gửi <b>{vector+text}</b> · hiện kết quả. Chạy laptop yếu. Server trả về sau khi <b>hybrid-only</b> (không rerank).</div></div>
+    <div class="card"><div class="q">v1 · USER (live)</div><div class="w">Client mỏng: tải MODEL · embed query · gửi <b>{vector+text}</b> · hiện kết quả. Chạy laptop yếu. Server trả về sau khi <b>dense retrieve</b> (không rerank).</div></div>
     <div class="card"><div class="q">v2 · DEVELOPER (máy Mac)</div><div class="w">Off 99%, bật khi cần. Build kho + <b>vòng cải tiến</b>: log query → <b>rerank batch</b> → đào hard-negative → <b>fine-tune</b> embedder → re-embed → đẩy server.</div></div>
-    <div class="card"><div class="q">☁️ Server · 16GB · no-GPU</div><div class="w">Giữ Index 33k + <code>documents</code>. Chỉ <b>hybrid retrieve</b> (CPU dư sức, nhiều user) + <b>log query</b>. <b>KHÔNG rerank/fine-tune</b> (không GPU) → đẩy hết sang Mac.</div></div>
+    <div class="card"><div class="q">☁️ Server · 16GB · no-GPU</div><div class="w">Giữ Index 33k + <code>documents</code>. Chỉ <b>dense retrieve</b> (CPU dư sức, nhiều user) + <b>log query</b>. <b>KHÔNG rerank/fine-tune</b> (không GPU) → đẩy hết sang Mac.</div></div>
     <div class="card"><div class="q">Phát hành & riêng tư</div><div class="w">Model publish→app tải; fine-tune ⇒ re-embed index. ⚠️ <b>query log = dữ liệu toà</b> → ẩn danh / giữ cẩn thận.</div></div>
   </div>
-  <p class="meta-row" style="margin-top:8px">🟩 reuse Phiên 1 · 🟦 index (ở SERVER) · 🟨 kết quả · ⬚ ranh giới máy · 🔁 vòng offline (Mac). <b>Live = hybrid-only mãi mãi</b>; rerank CHỈ trong vòng cải tiến offline để fine-tune model.</p>
+  <p class="meta-row" style="margin-top:8px">🟩 reuse Phiên 1 · 🟦 index (ở SERVER) · 🟨 kết quả · ⬚ ranh giới máy · 🔁 vòng offline (Mac). <b>Live = dense retrieve-only mãi mãi</b>; rerank CHỈ trong vòng cải tiến offline để fine-tune model.</p>
 
 
 
 
   <h2>✅ 3 điều research lôi ra — ĐÃ GIẢI trong lúc bàn</h2>
   <div class="risk" style="border-left-color:var(--green)"><div class="constraint">
-    <b>① Phần cứng deploy</b><div>Research đoán "prod 8GB no-GPU". Thực: <b>server 16GB no-GPU</b> + <b>app tải về</b>. <span style="color:#56d364">GIẢI: client embed query · server chỉ hybrid-only (không GPU vẫn dư) · mọi việc GPU (build/fine-tune/rerank) dồn sang máy Mac offline.</span></div>
+    <b>① Phần cứng deploy</b><div>Research đoán "prod 8GB no-GPU". Thực: <b>server 16GB no-GPU</b> + <b>app tải về</b>. <span style="color:#56d364">GIẢI: client embed query · server chỉ dense retrieve (không GPU vẫn dư) · mọi việc GPU (build/fine-tune/rerank) dồn sang máy Mac offline.</span></div>
   </div></div>
   <div class="risk" style="border-left-color:var(--green)"><div class="constraint">
     <b>② 53% corpus là Quyết định thủ tục</b><div>(chỉ ~43-44% doc có header "NỘI DUNG VỤ ÁN"). <span style="color:#56d364">GIẢI: index HẾT + gắn nhãn bản-án/quyết-định để thẩm phán lọc; embed section-nếu-có, không thì cả doc.</span></div>
@@ -257,7 +257,7 @@
     <div class="card"><div class="q">Chunk kiểu gì?</div><div class="r">→ sliding-window ~400-512 tok (15% overlap) + parent-child</div><div class="w">late-chunking bất khả (fine-tune cap 2048 < doc p90 ~8.9k)</div></div>
     <div class="card"><div class="q">cosine hay dot?</div><div class="r">→ L2-norm + cosine</div><div class="w">trên vector chuẩn hoá, dot ≡ cosine; giữ HNSW chuẩn</div></div>
     <div class="card"><div class="q">vector hay halfvec?</div><div class="r">→ halfvec(1024)</div><div class="w">float16 nửa RAM/disk, gần như không mất recall — quan trọng ở server 16GB no-GPU</div></div>
-    <div class="card"><div class="q">Hybrid hay dense-only?</div><div class="r">→ hybrid ngay (RRF k=60)</div><div class="w">đã có sẵn tsv; luật cần khớp token chính xác (Điều X, số vụ)</div></div>
+    <div class="card"><div class="q">Hybrid hay dense-only?</div><div class="r">→ E4 chốt DENSE-primary</div><div class="w">thử hybrid RRF nhưng dense ≈ hybrid (n=308, trong nhiễu); ts_rank không IDF + tách âm tiết → chỉ nhiễu</div></div>
     <div class="card"><div class="q">Reranker giờ chưa?</div><div class="r">→ defer, có điều kiện</div><div class="w">đòn bẩy mạnh nhất NHƯNG khó deploy trên server 16GB no-GPU; cần đo</div></div>
   </div>
 
@@ -268,7 +268,7 @@
       <tr><td>Model</td><td>bge-m3</td><td class="win">AITeamVN/Vietnamese_Embedding</td></tr>
       <tr><td>Chunk</td><td>sliding-window</td><td class="win">+ section-aware + parent-child</td></tr>
       <tr><td>Lưu vector</td><td>vector(1024)</td><td class="win">halfvec(1024)</td></tr>
-      <tr><td>Retrieval</td><td>dense cosine</td><td class="win">hybrid dense+BM25 RRF</td></tr>
+      <tr><td>Retrieval</td><td>dense cosine</td><td class="win">dense-primary (E4: hybrid không hơn)</td></tr>
       <tr><td>Rerank</td><td>E4 (mặc nhiên)</td><td>defer + offline trên Mac (server 16GB no-GPU)</td></tr>
       <tr><td>Late chunking</td><td>—</td><td class="vs-cut">bỏ (cap 2048 tok)</td></tr>
       <tr><td>GraphRAG / HyDE / ColBERT</td><td>—</td><td class="vs-cut">bỏ (thừa ở 34k)</td></tr>
@@ -281,9 +281,9 @@
     <div class="ph"><div class="pt">E0 · Bật stack</div><div class="pd"><code>CREATE EXTENSION vector</code> + bảng <code>chunks</code> (doc_id, section, chunk_text, <code>halfvec(1024)</code>, tsv + GIN). Không đổi image.</div></div>
     <div class="ph"><div class="pt">E1 · Tách section + chunk (offline M5)</div><div class="pd">regex bao-dung-dấu nhận 4 header → chunk facts/reasoning nếu có, không thì cả doc · tag bản-án/quyết-định · chỉ bucket clean/minor (tránh rác OCR).</div></div>
     <div class="ph"><div class="pt">E2 · Embed + index (offline M5/MPS)</div><div class="pd">AITeamVN (L2-norm) · build HNSW <code>halfvec_cosine_ops</code> (m=16, ef_construction=64).</div></div>
-    <div class="ph"><div class="pt">E3 · Endpoint hybrid (manager backend)</div><div class="pd">Nhận query <b>text HOẶC PDF</b> (PDF → <code>utils.extract_text</code> Phiên 1) → embed → 1 SQL CTE: ANN top-60 + ts_rank_cd top-60 → RRF(60) → max-pool → dedupe parent. <code>ef_search=100</code> (as-built).</div></div>
-    <div class="ph"><div class="pt">E4 · Eval harness — <b>cổng quyết định</b></div><div class="pd">ranx · nDCG@10 / Recall@50 / MRR@10 · ~300-500 query synthetic (Ollama) + 50-100 gold hand-label · A/B model & chunk & hybrid.</div></div>
-    <div class="ph"><div class="pt">E5 · Reranker (có điều kiện)</div><div class="pd">chỉ sau khi E4 cho thấy trần hybrid · A/B AITeamVN/Vietnamese_Reranker vs ViRanker · CHỈ chạy offline trên Mac (server 16GB no-GPU không rerank live) · ngưỡng "không có án tương tự rõ".</div></div>
+    <div class="ph"><div class="pt">E3 · Endpoint search (manager backend)</div><div class="pd">Nhận <b>vector + text</b> (client embed; PDF → trích text) → SQL: ANN HNSW cosine → max-pool về bản án → top-N. <b>As-built dense-primary</b> sau E4 (ban đầu hybrid RRF, đã bỏ BM25). <code>ef_search</code> theo độ sâu.</div></div>
+    <div class="ph"><div class="pt">E4 · Eval harness — <b>cổng quyết định ✓</b></div><div class="pd">~308 query synthetic (gemma cloud) · metric tự tính nDCG@10/MRR/Recall · <b>KQ: dense 0,201 ≈ hybrid 0,205 · BM25 0,026</b> → chốt dense-primary. Caveat: exact-source understate → cần LLM-judge cho số chất lượng thật.</div></div>
+    <div class="ph"><div class="pt">E5 · Reranker (có điều kiện)</div><div class="pd">chỉ sau khi E4 cho thấy trần dense retrieve · A/B AITeamVN/Vietnamese_Reranker vs ViRanker · CHỈ chạy offline trên Mac (server 16GB no-GPU không rerank live) · ngưỡng "không có án tương tự rõ".</div></div>
   </div>
 
   <h2>Rủi ro phải nhớ</h2>

@@ -1,11 +1,18 @@
-"""E3 — Search router (hybrid retrieve) cho app THẨM PHÁN. Tách khỏi router admin.
+"""Search router (dense-primary) cho app THẨM PHÁN. Tách khỏi router admin.
 
-Luồng: query (text + vector) → dense ANN (HNSW, cosine) + BM25 (tsv) song song →
-RRF (k=60) → max-pool về bản án (parent) → trả top doc + snippet.
+Luồng: query (vector) → dense ANN (HNSW, cosine) → max-pool về bản án (chunk gần
+nhất mỗi doc) → top-N bản án + snippet.
+
+Vì sao DENSE-ONLY (không hybrid BM25): E4 eval (n=308 synthetic query) cho thấy
+hybrid ≈ dense (chênh ≤0.026, trong nhiễu ±0.027), BM25 một mình gần vô dụng
+(nDCG 0.026). Với query diễn-giải tình tiết, embedding mang gần hết tín hiệu;
+ts_rank của Postgres (không IDF, tách âm tiết tiếng Việt) chỉ thêm nhiễu. Bỏ lexical
+cho gọn. Nếu sau này cần exact-match query NGẮN (Điều X, tên riêng) thì thêm lại
+BM25 TỬ TẾ (word-level + IDF), không phải hack đếm âm tiết. Xem journal Phiên 2.
 
 - Client (app v1) gửi {query, vector}: vector do máy user embed (cùng model AITeamVN).
-- Nếu KHÔNG có vector (dev/test): server lazy-load model embed query. Production
-  (image nhẹ, không torch) sẽ báo 501 → buộc client gửi vector.
+- Thiếu vector (dev/test): server lazy-load model. Production (image nhẹ, không torch)
+  sẽ báo 501 → buộc client gửi vector.
 """
 import os
 import psycopg
@@ -14,7 +21,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 DSN = os.environ.get("PG_DSN", "postgresql://legal:legal@localhost:5433/legal")
-RRF_K = 60
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 _model = None
@@ -38,34 +44,21 @@ def _fmt(vec):
 
 _SQL = """
 WITH dense AS (
-  SELECT id, doc_id, row_number() OVER (ORDER BY dist) AS rnk FROM (
-    SELECT id, doc_id, embedding <=> %(vec)s::halfvec AS dist
-    FROM chunks ORDER BY embedding <=> %(vec)s::halfvec LIMIT %(k)s) t
+  SELECT id, doc_id, embedding <=> %(vec)s::halfvec AS dist
+  FROM chunks ORDER BY embedding <=> %(vec)s::halfvec LIMIT %(cand)s
 ),
-lex AS (
-  SELECT id, doc_id, row_number() OVER (ORDER BY score DESC) AS rnk FROM (
-    SELECT id, doc_id, ts_rank_cd(tsv, q) AS score
-    FROM chunks, websearch_to_tsquery('simple', unaccent(%(q)s)) q
-    WHERE tsv @@ q ORDER BY score DESC LIMIT %(k)s) t
-),
-fused AS (
-  SELECT chunk_id, doc_id, sum(s) AS rrf FROM (
-    SELECT id AS chunk_id, doc_id, 1.0/(%(rrf)s + rnk) AS s FROM dense
-    UNION ALL
-    SELECT id, doc_id, 1.0/(%(rrf)s + rnk) FROM lex
-  ) u GROUP BY chunk_id, doc_id
-),
-perdoc AS (   -- max-pool: chunk khớp nhất của mỗi bản án
-  SELECT DISTINCT ON (doc_id) doc_id, chunk_id, rrf
-  FROM fused ORDER BY doc_id, rrf DESC
+perdoc AS (   -- max-pool: chunk gần nhất của mỗi bản án
+  SELECT DISTINCT ON (doc_id) doc_id, id AS chunk_id, dist
+  FROM dense ORDER BY doc_id, dist ASC
 )
-SELECT p.doc_id, d.filename, d.doc_type, round(p.rrf::numeric, 5) AS score,
+SELECT p.doc_id, d.filename, d.doc_type,
+       round((1 - p.dist)::numeric, 4) AS score,   -- cosine similarity
        left(regexp_replace(c.chunk_text, E'\\n', ' ', 'g'), 300) AS snippet
 FROM perdoc p
 JOIN documents d ON d.id = p.doc_id
 JOIN chunks    c ON c.id = p.chunk_id
 WHERE (%(doc_type)s::text IS NULL OR d.doc_type = %(doc_type)s::text)
-ORDER BY p.rrf DESC, p.doc_id     -- tiebreak ổn định khi RRF hòa điểm (eval reproducible)
+ORDER BY p.dist ASC
 LIMIT %(top)s;
 """
 
@@ -73,7 +66,6 @@ LIMIT %(top)s;
 class SearchReq(BaseModel):
     query: str
     vector: list[float] | None = None   # client-embed; None -> server embed (dev)
-    k: int = 60                          # số ứng viên mỗi nhánh (dense/lex)
     top: int = 20                        # số bản án trả về
     doc_type: str | None = None          # lọc: 'ban_an' / 'quyet_dinh' / None=cả hai
 
@@ -83,9 +75,9 @@ def search(req: SearchReq):
     if not req.query.strip():
         raise HTTPException(400, "query rỗng")
     vec = req.vector if req.vector is not None else _embed(req.query)
-    params = {"vec": _fmt(vec), "q": req.query, "k": req.k, "rrf": RRF_K,
-              "doc_type": req.doc_type, "top": req.top}
+    cand = max(200, req.top * 12)        # đủ chunk để max-pool ra >= top doc riêng
+    params = {"vec": _fmt(vec), "cand": cand, "doc_type": req.doc_type, "top": req.top}
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        conn.execute("SET LOCAL hnsw.ef_search = 100")
+        conn.execute(f"SET LOCAL hnsw.ef_search = {max(100, cand)}")
         rows = conn.execute(_SQL, params).fetchall()
     return {"query": req.query, "count": len(rows), "results": rows}

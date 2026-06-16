@@ -467,6 +467,18 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
           </div>
         </div>
 
+        <div class="entry corr">
+          <span class="ph">㉒ E4 · Eval retrieval — chốt DENSE-PRIMARY</span>
+          <h3>Synthetic query → đo dense vs hybrid: nhánh lexical không kiếm đủ cơm</h3>
+          <div class="card">
+            <p><span class="tag t-dec">HARNESS</span> <code>eval_gen.py</code>: gemma cloud (ollama) sinh ~300 query từ tình tiết bản án (ẩn danh tên/số/ngày, GIỮ dấu vân tay tình tiết) → bản án gốc = đáp án đúng. <code>eval_run.py</code>: embed query (AITeamVN/MPS) → 3 mode (hybrid/dense/bm25) → metric TỰ TÍNH nDCG@10 / MRR / Recall (bỏ <code>ranx</code>, khỏi cài dep nặng).</p>
+            <p><span class="tag t-corr">3 BẪY PHẢI VÁ</span> (1) ẩn danh QUÁ mạnh → query chung chung, bản án gốc lẫn vào hàng nghìn vụ na ná → Hit@100 0,12 → sửa prompt GIỮ chi tiết đặc trưng (loại hàng/tài sản, diễn biến). (2) <b>BM25 = 0</b>: query dài → <code>websearch_to_tsquery</code> AND ~80 từ → khớp RỖNG (bug NÀY CŨNG có ở search.py production!). (3) OR-tất-cả-token → khớp 357k/357k chunk, <code>ts_rank_cd</code> <b>34s/query</b> → chỉ giữ top-K từ HIẾM (IDF thủ công qua DF cache <code>ts_stat</code>); gốc: tiếng Việt đơn âm + config <code>simple</code> tách theo ÂM TIẾT.</p>
+            <p><span class="tag t-data">KẾT QUẢ (n=308)</span> nDCG@10: dense <b>0,201</b> · hybrid <b>0,205</b> · bm25 <b>0,026</b>. dense ≈ hybrid (chênh ≤0,026 < SE ±0,027 → KHÔNG ý nghĩa thống kê); R@10 BẰNG HỆT 0,276. BM25 một mình gần vô dụng → embedding mang gần hết tín hiệu; lexical (ts_rank không IDF + tách âm tiết) chỉ thêm nhiễu.</p>
+            <p><span class="tag t-dec">CHỐT DENSE-PRIMARY</span> Refactor <code>search.py</code> bỏ RRF/BM25, chỉ DENSE (HNSW cosine → max-pool → top-N, score = cosine sim). Gọn, không hack âm tiết, chất lượng tương đương. Exact-match query NGẮN (Điều X, tên riêng) để sau làm BM25 <b>word-level + IDF</b> tử tế nếu cần — không phải đếm âm tiết.</p>
+            <p><span class="tag t-corr">CAVEAT THƯỚC ĐO</span> Hit@100 chỉ 0,42 vì chấm "đúng BẢN ÁN GỐC" trên corpus đầy vụ na ná — top kết quả THỰC RA toàn vụ cùng loại (đúng mục tiêu "tìm vụ tương tự"). Metric exact-source ĐÁNH GIÁ THẤP giá trị thật; muốn số chất lượng đúng cần <b>LLM-judge</b> (chấm "có thực sự tương tự không") hoặc gold set người-duyệt.</p>
+          </div>
+        </div>
+
       </div>
 
       <h4 class="sec">Cấu hình chốt (Phiên 2)</h4>
@@ -475,7 +487,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
         <div>Chunking</div><div><code>manager/chunk.py</code>: đều ~450 tok · overlap 67 · gộp &lt;40 · header chỉ gắn nhãn section · 357.104 chunk / 33.723 doc</div>
         <div>Embed</div><div><code>manager/embed.py</code>: MPS · <b>fp32</b> · resumable · BATCH 128 · chạy đêm qua <code>caffeinate</code> · $0 không cloud</div>
         <div>Index</div><div>pgvector <code>halfvec(1024)</code> HNSW <code>cosine_ops</code> m=16/ef_c=64 (~904MB) + tsv GIN <code>simple+unaccent</code> (170MB) ≈ 1,1GB</div>
-        <div>Search</div><div><code>manager/backend/search.py</code>: dense + BM25 → RRF k=60 → max-pool về bản án → top-N · <code>hnsw.ef_search=100</code> · lọc doc_type</div>
+        <div>Search</div><div><code>manager/backend/search.py</code>: <b>dense-primary</b> (HNSW cosine → max-pool về bản án → top-N, score cosine) · lọc doc_type · BM25/RRF đã bỏ sau E4 (không thêm giá trị đo được)</div>
         <div>Kiến trúc</div><div>app 2 bản (judge/dev) · client embed query · server 16GB no-GPU hybrid-only · rerank+fine-tune OFFLINE trên Mac → re-embed → đẩy server</div>
         <div>DB</div><div>Postgres 16 + pgvector 0.8.2 (Docker, cổng 5433, named volume <code>legal_pgdata</code>, <code>shm_size 3gb</code> cho HNSW build)</div>
       </div>
@@ -483,7 +495,7 @@ Ngay cả tài liệu OCR tệ nhất hồi xưa (mất ~nửa dấu) → OCR l�
       <h4 class="sec">Còn lại trong Phiên 2 — câu hỏi mở</h4>
       <div class="open">
         <ul>
-          <li><b>E4 eval</b> — dựng harness: sinh synthetic query → chấm <code>ranx</code> nDCG@10/Recall@50 → A/B AITeamVN vs bge-m3, chunk 450 vs khác.</li>
+          <li><b>E4 eval ✓</b> — đã chạy (n=308): dense ≈ hybrid → chốt <b>dense-primary</b>. CÒN: <b>LLM-judge</b> trên ~50-100 query để có số chất lượng THẬT (exact-source understate); A/B bge-m3 re-embed defer (giá trị thấp vì dense AITeamVN đã ổn).</li>
           <li><b>Deploy</b> — docker-compose production + Caddy (TLS) cho server 16GB; chuyển index Mac→server bằng <code>pg_dump</code>.</li>
           <li><b>App Tauri</b> — embed query client-side bằng <b>ONNX + ort + tokenizers</b> (model export từ AITeamVN); trích text từ PDF query; auth/license cho server trả phí.</li>
           <li><b>Publish model</b> — script Mac→HuggingFace sau mỗi vòng fine-tune (đã cân nhắc CI/CD HF).</li>

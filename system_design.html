@@ -39,7 +39,7 @@
 
   <div class="kicker">🏗️ Thiết kế hệ thống + Deploy</div>
   <h1>Legal Agent — kiến trúc production</h1>
-  <p class="sub">Chốt: <b>1 codebase React + 1 backend FastAPI → 2 bản Tauri</b> — v1 THẨM PHÁN (search-only, live) &amp; v2 ADMIN/DEV (quản trị corpus + pipeline, chạy trên Mac) · <b>Model host = HuggingFace</b> · <b>Server = Ubuntu 16GB no-GPU</b> (Docker) · client-embed, server hybrid-only, fine-tune offline trên Mac.</p>
+  <p class="sub">Chốt: <b>1 codebase React + 1 backend FastAPI → 2 bản Tauri</b> — v1 THẨM PHÁN (search-only, live) &amp; v2 ADMIN/DEV (quản trị corpus + pipeline, chạy trên Mac) · <b>Model host = HuggingFace</b> · <b>Server = Ubuntu 16GB no-GPU</b> (Docker) · client-embed, server dense-only (retrieve), fine-tune offline trên Mac.</p>
 
   <div class="tldr"><b>Bức tranh:</b> <b>1 codebase</b> (React UI + backend FastAPI, <code>manager/</code>) → build ra <b>2 bản Tauri</b>. 🍎 <b>Máy Mac</b> chạy <b>v2 ADMIN</b> (Tauri mode admin) — quản trị corpus (Dashboard/DocList/DocDetail) + điều khiển pipeline (chunk/embed/build-index/rerank/fine-tune/re-embed) qua Postgres+FastAPI <b>LOCAL</b> trên Mac → publish MODEL lên 🤗 <b>HuggingFace</b> + push INDEX (pg_dump) sang ☁️ <b>Server</b>. 💻 <b>v1 THẨM PHÁN</b> (Tauri mode judge, search-only) tải model từ HF, embed query tại máy, gửi <code>{vector+text}</code> lên Server (Postgres+pgvector + FastAPI), nhận bản án. Server log query → vòng cải tiến chạy trên app admin ở Mac.</div>
   <p class="meta-row"><b>Trạng thái build (Phiên 2):</b> E0 schema ✓ · E1 chunk ✓ · E2 embed fp32 + HNSW ✓ · E3 search router ✓ — đã index <b>33.723 doc sạch</b> (bỏ 681 reocr) → <b>357.104 chunk</b> (~10,6/doc · quyết định 17.519 / bản án 16.204); pgvector <code>halfvec(1024)</code> HNSW cosine ~904MB + tsv GIN 170MB ≈ <b>1,1GB</b>. KẾ: E4 (eval synthetic + ranx).</p>
@@ -94,7 +94,7 @@
         <text x="720" y="114">admin app: corpus + pipeline</text>
         <text x="720" y="132">Postgres+FastAPI LOCAL · off 99%</text>
         <text x="730" y="372">Postgres+pgvector · FastAPI</text>
-        <text x="730" y="390">Caddy · hybrid retrieve</text>
+        <text x="730" y="390">Caddy · dense retrieve</text>
         <text x="730" y="408">log query · no-GPU</text>
         <text x="210" y="372">embed query (CPU)</text>
         <text x="210" y="390">UI · nhập tình tiết/PDF</text>
@@ -134,7 +134,7 @@
       <g fill="#5b6470" font-size="10.5" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">
         <text x="115" y="122">{vector+text}</text>
         <text x="335" y="122">TLS · :443</text>
-        <text x="580" y="122">hybrid · :8000</text>
+        <text x="580" y="122">dense · :8000</text>
         <text x="850" y="122">chunks + documents</text>
       </g>
     </svg>
@@ -146,7 +146,7 @@
     <tbody>
       <tr><td>🍎 <b>Mac · v2 ADMIN</b> (Tauri)</td><td>App admin: UI quản trị corpus (Dashboard/DocList/DocDetail) + nút điều khiển pipeline (ingest/chunk/embed/build-index/rerank/fine-tune/re-embed/publish-model/push-index) · nói chuyện Postgres+FastAPI <b>LOCAL</b> trên Mac</td><td>offline, bật khi cần</td></tr>
       <tr><td>🤗 <b>HuggingFace</b></td><td>Host MODEL embed (có version). App tải qua link config khi cài/update</td><td>luôn (CDN của HF)</td></tr>
-      <tr><td>☁️ <b>Server Ubuntu 16GB</b></td><td>Caddy (TLS) + FastAPI (hybrid retrieve: ANN+BM25→RRF→max-pool) + Postgres/pgvector (chunks+documents) · log query</td><td>24/7</td></tr>
+      <tr><td>☁️ <b>Server Ubuntu 16GB</b></td><td>Caddy (TLS) + FastAPI (dense retrieve: HNSW cosine→max-pool về bản án) + Postgres/pgvector (chunks+documents) · log query</td><td>24/7</td></tr>
       <tr><td>💻 <b>v1 THẨM PHÁN</b> (Tauri · judge)</td><td>Search-only (KHÔNG admin/rerank) · tải model · embed query (CPU) · UI nhập tình tiết/PDF · gửi {vector+text} · hiện bản án</td><td>khi user dùng</td></tr>
     </tbody>
   </table>
@@ -156,7 +156,7 @@
   <p class="sub" style="margin:2px 0 8px"><b>Server (1 lần):</b></p>
   <ol>
     <li>Provision Ubuntu 16GB + cài Docker + Docker Compose.</li>
-    <li><code>docker-compose</code>: <code>db</code> (pgvector/pgvector:pg16, <code>shm_size 3gb</code>) + <code>backend</code> (FastAPI/uvicorn — router hybrid <code>manager/backend/search.py</code> đã có, POST <code>/api/search</code>; image nhẹ KHÔNG torch, client gửi sẵn vector) + <code>caddy</code> (reverse proxy + auto-TLS).</li>
+    <li><code>docker-compose</code>: <code>db</code> (pgvector/pgvector:pg16, <code>shm_size 3gb</code>) + <code>backend</code> (FastAPI/uvicorn — router <code>manager/backend/search.py</code> dense-primary, POST <code>/api/search</code>; image nhẹ KHÔNG torch, client gửi sẵn vector) + <code>caddy</code> (reverse proxy + auto-TLS).</li>
     <li>Đưa INDEX lên: <code>pg_dump</code> bảng <code>documents</code> + <code>chunks</code> (đã embed, ~1,1GB) từ Mac → <code>scp</code> → restore vào Postgres server. Ưu tiên dump nguyên HNSW/GIN index để KHỎI build lại; nếu REINDEX trên server thì nhớ <code>shm_size 3gb</code> (mặc định /dev/shm 64MB → DiskFull). Server không-GPU nên KHÔNG embed lại — chỉ nhận vector dựng sẵn.</li>
     <li>Domain → Caddy (HTTPS tự động). Mở chỉ :443.</li>
     <li>Bật log query (ghi bảng <code>query_log</code>) cho vòng cải tiến v2.</li>
@@ -174,7 +174,7 @@
   <div class="open"><b>Trích xuất query-PDF:</b> PDF text → PyMuPDF (nhẹ, nhúng được). PDF scan → cần OCR (nặng) → đẩy server hoặc bảo user dán text. Khác với kho (Surya offline).</div>
   <div class="open"><b>Auth / license server trả phí:</b> nhiều user + server tính phí → cần token/API-key gắn app để chặn truy cập trái phép. Quyết định cơ chế license.</div>
   <div class="open"><b>Chuyển index Mac→Server:</b> pg_dump/restore (lần đầu + mỗi khi fine-tune: fine-tune đổi model ⇒ <b>BẮT BUỘC re-embed CẢ index</b> vì vector phải cùng phiên bản model ⇒ pg_dump lại). Cân nhắc dump chỉ <code>chunks</code>+<code>documents</code>, hoặc logical replication nếu cập nhật thường.</div>
-  <div class="open"><b>Riêng tư:</b> query rời máy lên server (cho BM25+log). Court data → cân nhắc ẩn danh log + TLS bắt buộc.</div>
+  <div class="open"><b>Riêng tư:</b> query rời máy lên server (server retrieve + log). Court data → cân nhắc ẩn danh log + TLS bắt buộc.</div>
 
   <p class="meta-row">Nối tiếp Phiên 2: E0–E3 ✓ (schema · chunk · embed+HNSW · search router <code>manager/backend/search.py</code>) → <b>E4</b> (eval synthetic + ranx) → đóng gói server + <b>2 bản Tauri</b> (v1 judge / v2 admin) theo blueprint này.</p>
 
