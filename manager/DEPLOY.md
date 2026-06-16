@@ -55,8 +55,13 @@ cd manager/frontend && VITE_API_BASE=https://search.tenmien.com npm run tauri:bu
 # hoặc CI: đặt repo Variable VITE_API_BASE = https://search.tenmien.com (release-app.yml)
 ```
 
-## E. Update sau này
-- Code backend đổi → push main → CI build+push image → trên server: `docker compose ... pull && up -d` (chỉ kéo layer code nhỏ).
-- Re-embed (fine-tune) → làm lại bước C.
+## E. Update sau này — TỰ ĐỘNG (watchtower)
+- Code backend đổi → push `main` → CI build+push image → **watchtower trên server tự
+  pull + recreate backend trong ~2 phút** (không cần SSH / lệnh tay). Backend restart
+  ~30-40s (nạp lại model) → có downtime ngắn mỗi lần deploy.
+- watchtower kéo image private bằng creds từ `docker login ghcr.io` (mount
+  `~/.docker/config.json`). Chỉ auto-update container có label (backend); db/cloudflared giữ nguyên.
+- Muốn deploy tay (không chờ poll): `docker compose -f docker-compose.prod.yml pull backend && up -d backend`.
+- Re-embed (fine-tune) → làm lại bước C (watchtower KHÔNG đụng index/DB).
 
 > Bảo mật: `.env` không commit; cân nhắc bỏ `ports: 8000:8000` của backend khi đã dùng tunnel (backend chỉ lộ qua Cloudflare). Privacy: query tới Gemini là free-tier (train data) — đổi tier no-train trước khi dùng vụ thật.
