@@ -4,7 +4,9 @@ import { api } from '../api.js'
 
 const TYPE = { ban_an: 'Bản án', quyet_dinh: 'Quyết định' }
 const N_CTX = 6                       // số nguồn đưa cho LLM
-const GMODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']   // overload thì fallback
+// primary = flash-latest (alias → flash mới nhất, Google tự định tuyến, đỡ 503);
+// fallback = các bản LITE (sẵn sàng cao hơn, quota free rộng hơn) khi quá tải.
+const GMODELS = ['gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // Tóm tắt do CHÍNH MÁY USER gọi Gemini bằng key riêng của họ (BYOK, lưu localStorage).
