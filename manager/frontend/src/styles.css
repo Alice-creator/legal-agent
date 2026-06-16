@@ -69,3 +69,21 @@ mark.hq { background: rgba(210,153,34,.45); color: #fff; border-radius: 2px; }
 .garble-n { color: #f85149; font-weight: 600; }
 .pane textarea { flex: 1; resize: none; font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
 .pane iframe { flex: 1; border: 0; background: #fff; border-radius: 4px; }
+
+/* --- Trang tìm vụ tương tự (thẩm phán) --- */
+.search-page { max-width: 860px; }
+.search-form { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 20px; }
+.search-form textarea { width: 100%; resize: vertical; line-height: 1.5; }
+.search-controls { display: flex; gap: 10px; align-items: center; }
+.search-controls button { margin-left: auto; }
+.results { display: flex; flex-direction: column; gap: 10px; }
+.result { display: block; background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--blue); border-radius: 8px; padding: 11px 14px; color: var(--txt); }
+.result:hover { border-color: var(--blue); text-decoration: none; background: #131922; }
+.result-head { display: flex; align-items: center; gap: 10px; }
+.result .rank { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.result .score { font-weight: 700; color: #3fb950; font-variant-numeric: tabular-nums; }
+.result .fname { color: var(--muted); font: 12px ui-monospace, Menlo, monospace; margin-left: auto; }
+.result .snippet { margin: 6px 0 0; color: #c9d1d9; font-size: 13px; }
+.badge.t-ban_an { background: rgba(56,139,253,.18); color: #6cb6ff; }
+.badge.t-quyet_dinh { background: rgba(210,153,34,.18); color: #e3b341; }
