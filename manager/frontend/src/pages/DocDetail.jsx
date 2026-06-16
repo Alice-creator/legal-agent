@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { api } from '../api.js'
+import { api, API_BASE } from '../api.js'
 import { highlight, countGarble } from '../highlight.jsx'
 
 export default function DocDetail() {
@@ -76,7 +76,7 @@ export default function DocDetail() {
         </div>
         <div className="pane">
           <h4>PDF gốc (đối chiếu)</h4>
-          <iframe title="pdf" src={'/api/docs/' + id + '/pdf'} />
+          <iframe title="pdf" src={API_BASE + '/api/docs/' + id + '/pdf'} />
         </div>
       </div>
     </div>
