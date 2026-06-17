@@ -46,7 +46,25 @@ scp legal_index.dump server@192.168.2.13:~/
 docker compose -f docker-compose.prod.yml exec -T db \
   pg_restore -U legal -d legal --no-owner < ~/legal_index.dump
 ```
-(Schema do image/lần đầu tạo; nếu DB trống cần `psql ... -f schema.sql` trước.)
+(Thực tế đã làm: server `CREATE EXTENSION vector/unaccent/pg_trgm` trước; restore **data-only**
+(`--section=pre-data --section=data`) rồi tự `CREATE INDEX ... hnsw` với `SET maintenance_work_mem='2GB';
+SET max_parallel_maintenance_workers=4;` — dựng ~1-2 phút; để mặc định 64MB thì RẤT chậm. HNSW build
+chỉ cần CPU, không cần GPU. Mac sau NAT không ssh được → chuyển dump qua **quick tunnel**: Mac serve file
+(`http-server` hỗ trợ Range) + `cloudflared tunnel --url`, server `curl -C -` về (resume được).)
+
+## C2. Nạp PDF gốc (38GB) — để hiển thị bản án scan
+Backend serve PDF qua `/api/docs/:id/pdf` từ `PDF_DIR=/app/data/legal-data`, **mount từ host `./pdfs`**
+(đã khai trong compose: `backend.volumes: - ./pdfs:/app/data/legal-data:ro`).
+```bash
+# Mac: tar 35089 PDF phẳng (--no-xattrs để Linux không spam warning xattr macOS)
+tar --no-xattrs -cf pdfs.tar -C data/legal-data .
+# chuyển sang server (NAT: serve qua quick tunnel + server `curl -C -`; hoặc scp nếu có ssh)
+# server (trong thư mục chứa compose):
+mkdir -p pdfs && tar -xf /tmp/pdfs.tar -C pdfs/        # -> ~35089 file
+docker compose -f docker-compose.prod.yml up -d backend   # áp volume
+```
+⚠️ Giải nén + verify (`ls pdfs/ | wc -l` ≈ 35089, `/api/docs/:id/pdf` → 200) XONG rồi mới `rm` tar.
+**Đừng chain `rm` vào cùng block** — extract lỗi mà `rm` vẫn chạy là mất file (đã dính 1 lần).
 
 ## D. Build app trỏ tới server
 ```bash

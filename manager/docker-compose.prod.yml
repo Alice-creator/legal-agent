@@ -1,13 +1,3 @@
-# Deploy server (home-lab Ubuntu sau NAT). Trên server:
-#   docker login ghcr.io                      # 1 lần (PAT có read:packages)
-#   cp .env.prod.example .env  && sửa .env     # POSTGRES_PASSWORD + CF_TUNNEL_TOKEN
-#   docker compose -f docker-compose.prod.yml pull
-#   docker compose -f docker-compose.prod.yml up -d
-#
-# - backend: kéo image GHCR (đã bake model -> chạy ngay), tự embed query + dense retrieve
-# - db: pgvector. PHẢI nạp INDEX trước (pg_dump documents+chunks từ Mac -> restore)
-# - cloudflared: Cloudflare Tunnel -> public HTTPS hostname, KHÔNG mở port/router.
-#   Ingress (hostname -> http://backend:8000) cấu hình ở Cloudflare Zero Trust dashboard.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -29,12 +19,14 @@ services:
     image: ghcr.io/alice-creator/legal-agent-backend:latest
     restart: unless-stopped
     labels:
-      com.centurylinklabs.watchtower.enable: "true"   # watchtower auto-update CHỈ container này
+      com.centurylinklabs.watchtower.enable: "true"
     depends_on:
       db:
         condition: service_healthy
     environment:
       PG_DSN: postgresql://legal:${POSTGRES_PASSWORD:-legal}@db:5432/legal
+    volumes:
+      - ./pdfs:/app/data/legal-data:ro    # PDF gốc (mount từ host) -> endpoint /api/docs/:id/pdf
     ports:
       - "8000:8000"
 
