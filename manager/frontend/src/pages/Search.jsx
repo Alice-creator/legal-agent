@@ -8,6 +8,17 @@ const TYPE = { ban_an: 'Bản án', quyet_dinh: 'Quyết định' }
 const GMODELS = ['gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
+// Mở URL ngoài: Tauri (webview KHÔNG tự mở target=_blank) -> opener plugin;
+// chạy web/dev -> window.open. import động + catch để dùng được cả hai môi trường.
+const openExternal = async (url) => {
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener')
+    await openUrl(url)
+  } catch {
+    window.open(url, '_blank', 'noopener')
+  }
+}
+
 // Tóm tắt do CHÍNH MÁY USER gọi Gemini bằng key riêng của họ (BYOK, lưu localStorage).
 // Không qua server mình → server chỉ dense-retrieve, không giữ key, không tốn quota.
 // Luật nhạy cảm → ràng prompt chỉ-dựa-trích-dẫn + bắt buộc dẫn nguồn + cấm bịa.
@@ -122,7 +133,7 @@ export default function Search() {
                    onChange={e => setKeyInput(e.target.value)} />
             <button onClick={saveKey} disabled={!keyInput.trim()}>Lưu</button>
             <span className="muted">key chỉ lưu trên máy bạn ·
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"> lấy key free</a></span>
+              <a onClick={() => openExternal('https://aistudio.google.com/apikey')}> lấy key free</a></span>
           </>
         )}
       </div>
