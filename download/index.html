@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tải Legal Search — Tra cứu bản án tương tự</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--line:#2b3340;--txt:#e6edf3;--muted:#8b949e;--blue:#388bfd;--green:#2ea043;--amber:#d29922}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+  .wrap{max-width:680px;width:100%}
+  h1{font-size:24px;margin:0 0 4px} .sub{color:var(--muted);margin:0 0 24px}
+  .dl{display:flex;flex-direction:column;gap:12px}
+  .card{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:14px 18px;text-decoration:none;color:var(--txt);transition:border-color .15s}
+  .card:hover{border-color:var(--blue)}
+  .card.match{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+  .ico{font-size:26px;width:34px;text-align:center}
+  .card b{font-size:15px} .card .meta{color:var(--muted);font-size:12.5px}
+  .card .badge{margin-left:auto;font-size:11px;color:var(--green);font-weight:700}
+  .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
+    border-radius:8px;padding:12px 16px;margin-top:20px;font-size:13px;color:#d7dee6}
+  .note b{color:var(--amber)} details{margin-top:6px} summary{cursor:pointer;color:var(--blue)}
+  .foot{color:var(--muted);font-size:12px;margin-top:18px;text-align:center}
+  code{background:#1b212a;padding:1px 6px;border-radius:4px;font-size:12px;color:#d2a8ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚖️ Legal Search</h1>
+  <p class="sub">Tra cứu bản án/quyết định tương tự cho thẩm phán. Tải bản cho hệ điều hành của bạn:</p>
+
+  <div class="dl">
+    <a class="card" id="mac"   href="./LegalSearch-macos.dmg"><span class="ico">🍎</span><span><b>macOS</b><br><span class="meta">.dmg · Intel + Apple Silicon</span></span><span class="badge"></span></a>
+    <a class="card" id="win"   href="./LegalSearch-windows.exe"><span class="ico">🪟</span><span><b>Windows</b><br><span class="meta">.exe (cài đặt)</span></span><span class="badge"></span></a>
+    <a class="card" id="linux" href="./LegalSearch-linux.AppImage"><span class="ico">🐧</span><span><b>Linux</b><br><span class="meta">.AppImage</span></span><span class="badge"></span></a>
+  </div>
+
+  <div class="note">
+    <b>Lần đầu mở báo "không xác định nhà phát triển"?</b> (app chưa ký số — bình thường ở bản thử nghiệm)
+    <details><summary>macOS — cách mở</summary>
+      Chuột phải vào app → <b>Open</b> → <b>Open</b> lần nữa. (Hoặc System Settings → Privacy &amp; Security → "Open Anyway".)
+    </details>
+    <details><summary>Windows — cách mở</summary>
+      Màn hình xanh "Windows protected your PC" → bấm <b>More info</b> → <b>Run anyway</b>.
+    </details>
+  </div>
+
+  <p class="foot">App cần Internet để kết nối máy chủ tra cứu. Tính năng tóm tắt AI cần khoá Gemini (lấy free trong app).</p>
+</div>
+
+<script>
+  // tô đậm nút khớp HĐH người dùng
+  var p = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase();
+  var id = p.includes('win') ? 'win' : p.includes('mac') ? 'mac' : p.includes('linux') ? 'linux' : null;
+  if (id) { var el = document.getElementById(id); el.classList.add('match'); el.querySelector('.badge').textContent = '← máy của bạn'; }
+</script>
+</body>
+</html>
