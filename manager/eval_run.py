@@ -136,9 +136,11 @@ def main(qfile):
             queries.append((r["doc_id"], r["query"]))
     if not queries:
         sys.exit(f"không có query trong {qfile}")
-    print(f"{len(queries)} query · embed bằng {MODEL} (MPS)...", flush=True)
+    # Mặc định MPS vì máy dev là Mac Apple Silicon; máy Intel/Linux đặt EVAL_DEVICE=cpu để torch khỏi crash.
+    device = os.environ.get("EVAL_DEVICE", "mps")
+    print(f"{len(queries)} query · embed bằng {MODEL} ({device})...", flush=True)
 
-    m = SentenceTransformer(MODEL, device="mps")
+    m = SentenceTransformer(MODEL, device=device)
     vecs = m.encode([q for _, q in queries], batch_size=64,
                     normalize_embeddings=True, show_progress_bar=False)
 

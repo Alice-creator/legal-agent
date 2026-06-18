@@ -93,6 +93,7 @@ Chi tiết deploy/khôi-phục-index/transfer: đọc **`manager/DEPLOY.md`** (r
 ## Quy ước
 
 - Doc/comment/commit message viết **tiếng Việt**, thuật ngữ kỹ thuật để nguyên tiếng Anh.
+- **Comment = giải thích *business why*, không kể lại *what*.** Đoạn phức tạp — nhất là **SQL dài** — chú thích từng CTE/mệnh đề theo *mục đích nghiệp vụ* nó phục vụ (vd: "max-pool chunk về 1 dòng/bản án để vụ có nhiều đoạn khớp không bị đếm trùng"). Xem các comment sẵn có trong `manager/backend/search.py` làm mẫu.
 - `data/`, `pdfs/`, `.env*`, venv, `target/`, `node_modules/` đều gitignored — không commit.
 - Số liệu trong file này là **lúc viết** — đếm lại trước khi báo cáo (corpus có thể đổi).
 
