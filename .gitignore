@@ -8,3 +8,4 @@ __pycache__/
 .DS_Store
 reocr.out
 nohup.out
+.claude/settings.local.json
