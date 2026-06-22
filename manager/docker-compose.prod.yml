@@ -48,6 +48,9 @@ services:
       - ${HOME}/.docker/config.json:/config.json:ro   # creds GHCR (sau `docker login ghcr.io`)
     environment:
       DOCKER_CONFIG: /
+      # containrrr/watchtower bị bỏ rơi -> client Docker API mặc định cũ (1.25), bị daemon host
+      # (yêu cầu >=1.40) từ chối -> crash-loop. Ghim API version đủ mới để nói chuyện được với daemon.
+      DOCKER_API_VERSION: "1.44"
       WATCHTOWER_LABEL_ENABLE: "true"        # chỉ update container có label (backend)
       WATCHTOWER_CLEANUP: "true"             # xoá image cũ sau khi update
       WATCHTOWER_POLL_INTERVAL: "120"        # poll GHCR mỗi 120s

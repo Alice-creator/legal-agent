@@ -2,6 +2,15 @@ name: CI
 
 on:
   push:
+    # Image backend chỉ phụ thuộc code/Dockerfile/schema. Bỏ qua thay đổi thuần tài liệu/cấu hình
+    # -> push docs/.claude/compose KHÔNG rebuild + redeploy backend vô ích.
+    paths-ignore:
+      - '**.md'
+      - '.claude/**'
+      - 'docs/**'
+      - 'download/**'
+      - '*.html'
+      - 'manager/docker-compose*.yml'
   pull_request:
 
 permissions:
