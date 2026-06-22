@@ -50,6 +50,8 @@ Phiên 1 dùng venv **`.venv-surya`** (py3.12, surya-ocr, pymupdf). Backend Phi�
 - **38GB PDF gốc** nằm trên server (mount read-only) để hiện PDF.
 - Secrets qua `manager/.env.prod` (gitignored; mẫu ở `.env.prod.example`):
   `POSTGRES_PASSWORD`, `CF_TUNNEL_TOKEN`.
+- **Server chạy từ 1 bản `docker-compose.prod.yml` COPY tay lên (KHÔNG git clone)** + `.env` + `pdfs/`.
+  → repo và server **dễ lệch**: sửa compose bên nào nhớ mirror bên kia. ĐỪNG bày `git pull` trên server.
 
 ## Thao tác thường dùng
 
@@ -89,6 +91,10 @@ Chi tiết deploy/khôi-phục-index/transfer: đọc **`manager/DEPLOY.md`** (r
   quick-tunnel relay. `trycloudflare` thỉnh thoảng timeout — tạm thời, thử lại.
 - **`gh` CLI token ở máy này quyền hẹp** (403 khi đọc Variables/packages, không thấy
   release draft). Việc cần quyền đó → nhờ user thao tác trên web UI.
+- **Watchtower `containrrr/watchtower` đã bị bỏ rơi** → client Docker API cũ (1.25) bị daemon host
+  (≥1.40) từ chối → crash-loop, auto-deploy **chết âm thầm** (từng thấy `restarts=8772`). Fix: ghim
+  `DOCKER_API_VERSION: "1.44"` trong env service watchtower (đã có trong compose). Hỏng nữa → đổi fork
+  còn maintain, hoặc deploy tay (`docker compose ... pull backend && up -d backend`).
 
 ## Quy ước
 
