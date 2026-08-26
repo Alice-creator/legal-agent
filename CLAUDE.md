@@ -27,9 +27,12 @@ Phiên 1 dùng venv **`.venv-surya`** (py3.12, surya-ocr, pymupdf). Backend Phi�
 
 - **1 codebase → 2 bản Tauri build.** v1 = thẩm phán (search), v2 = admin (quản lý corpus).
   Cùng `manager/frontend`, khác build flag. ĐỪNG tách thành 2 repo.
-- **Dense-primary retrieval**, KHÔNG hybrid. E4 đo: dense 0.201 ≈ hybrid 0.205 (trong
-  nhiễu ±0.027), BM25 yếu + nhiễu âm-tiết-vỡ. → Bỏ BM25. Đừng "thêm lại hybrid cho chắc"
-  mà không đo lại — xem bẫy `websearch_to_tsquery` bên dưới.
+- **Dense-primary retrieval**, KHÔNG hybrid. E4 đo: dense 0.201 ≈ hybrid 0.205, BM25 yếu
+  + nhiễu âm-tiết-vỡ. → Bỏ BM25. Đừng "thêm lại hybrid cho chắc" mà không đo lại.
+  ⚠️ Nói cho đúng: E4 chứng minh **"BM25 KIỂU ĐÓ vô dụng"** (ts_rank_cd, config `simple`
+  tách âm tiết, IDF chắp vá), CHƯA chứng minh "tín hiệu từ vựng vô dụng". Đội nhất
+  COLIEE 2025 vẫn dùng BM25 làm tầng lọc đầu (recall 76-85% @top-100). Xem
+  `docs/retrieval_audit.md` §4.
 - **Server embed query bằng CPU** (`AITeamVN/Vietnamese_Embedding`, bge-m3 1024-dim,
   `halfvec(1024)`). ~1-3s/query, **không cần GPU**. App gửi *text*, server trả vector+kết quả.
 - **Tóm tắt AI = Gemini BYOK phía client.** Mỗi thẩm phán dùng key Google riêng (lưu
@@ -39,6 +42,26 @@ Phiên 1 dùng venv **`.venv-surya`** (py3.12, surya-ocr, pymupdf). Backend Phi�
 - **CI build image, server CHỈ pull.** GHCR `ghcr.io/alice-creator/legal-agent-backend`.
   Watchtower (label-scoped, **pull-based** vì server sau NAT) tự deploy khi CI push.
 - **Public HTTPS qua Cloudflare Tunnel** (server home-lab sau NAT, không port-forward).
+
+## Retrieval tốt tới đâu (audit 2026-08-26 · `docs/retrieval_audit.md`)
+
+Thiết kế đúng, **không phải làm lại**. Nhưng mới đi được 2/4 tầng của pipeline tra cứu án
+chuẩn (`lọc ứng viên → dense → cross-encoder rerank → cutoff thích ứng`), và **chưa biết
+chất lượng thật tới đâu** vì thước đo hiện tại không phân biệt được "retrieval yếu" với
+"corpus toàn vụ na ná".
+
+- **0.201 nDCG KHÔNG tệ như vẻ ngoài.** COLIEE 2026: tầng dense với model **8B** chỉ đạt
+  R@10 0.444; đội nhất COLIEE 2025 full pipeline được F1 0.335. Ta dùng model 0.6B chạy CPU.
+- **Corpus cực đồng nhất** (đo 700 PDF, `python3 manager/audit_corpus.py`): tín dụng 35%,
+  mua bán hàng hoá 18%. ⇒ "tìm đúng LOẠI vụ" không còn là phần khó; phần khó là phân biệt
+  chi tiết trong cùng loại, mà đó đúng là việc của **cross-encoder rerank** (chưa có).
+- **~1/3 chunk trong index không chứa tình tiết/lập luận** (quyết định thủ tục 16% + phần
+  mở đầu/quyết định trong bản án ~25%). Chưa lọc lúc retrieve.
+- **Chưa có reranker** = khoảng trống lớn nhất. `AITeamVN/Vietnamese_Reranker` (cùng nhóm
+  làm model embed) đo trên Legal Zalo: Acc@1 0.726 → **0.794**. Nhưng 0.6B chạy CPU ⇒
+  **PHẢI tự đo latency trên đúng server prod** trước khi bật.
+- **Chưa có `query_log`** ⇒ pilot với thẩm phán thật đang không thu được tín hiệu nào.
+- Việc theo thứ tự ROI + 3 thí nghiệm cần chạy trên máy có GPU: xem §6, §7 của audit.
 
 ## Hạ tầng thực tế
 
@@ -89,6 +112,15 @@ Chi tiết deploy/khôi-phục-index/transfer: đọc **`manager/DEPLOY.md`** (r
   thư mục nhưng `rm /tmp/pdfs.tar` vẫn chạy → mất 38GB. Luôn giải nén + verify TRƯỚC, `rm` riêng.
 - **Mac công ty không cài được Tailscale** (Darktrace quản lý) → transfer file qua CF
   quick-tunnel relay. `trycloudflare` thỉnh thoảng timeout — tạm thời, thử lại.
+- **Eval và production chạy KHÁC điểm vận hành.** `eval_run.py` mặc định `cand=500,
+  ef_search=500`; `search.py` chạy `cand=200, ef_search=200`. ⇒ Số của E4 KHÔNG mô tả
+  hành vi server đang phục vụ. Nâng ef_search tốn vài chục ms trong khi embed đã mất 1-3s.
+- **Lọc `doc_type` đang là POST-filter**: `search.py` lấy 200 chunk gần nhất TRƯỚC rồi mới
+  `WHERE doc_type=...` ⇒ lọc làm KÉM đi chứ không tìm sâu hơn, và chưa từng được eval.
+  Sửa: đưa `doc_type` xuống bảng `chunks` + `hnsw.iterative_scan` (pgvector 0.8 có sẵn).
+- **Code giả định máy dev là Mac.** `embed.py` hard-code `device="mps"` (máy Linux/CUDA
+  phải sửa); `eval_run.py` đã có lối thoát `EVAL_DEVICE=cpu`. `main.py` đọc `data/legal-data`
+  qua env `LEGAL_DATA`. Kiểm máy đang đứng trước khi chạy pipeline.
 - **`gh` CLI token ở máy này quyền hẹp** (403 khi đọc Variables/packages, không thấy
   release draft). Việc cần quyền đó → nhờ user thao tác trên web UI.
 - **Watchtower `containrrr/watchtower` đã bị bỏ rơi** → client Docker API cũ (1.25) bị daemon host
@@ -111,5 +143,6 @@ Chi tiết deploy/khôi-phục-index/transfer: đọc **`manager/DEPLOY.md`** (r
 | `system_design.html` | Kiến trúc Phiên 2 (đã cập nhật theo "1 codebase → 2 build") |
 | `research_journal.html` | Nhật ký + runbook tái lập Phiên 1 (trích xuất) — đọc mục "🔁 Tái lập" trước |
 | `rag_research.html` | Quá trình chốt thiết kế RAG (embedding, hybrid vs dense, E0–E4) |
-| `docs/product_decision.md` | Định nghĩa sản phẩm, cấu trúc 4 phần của bản án VN |
+| `docs/retrieval_audit.md` | **Audit chất lượng retrieval (2026-08)**: hiệu chuẩn với COLIEE/VN-MTEB, đo corpus, 5 khiếm khuyết code, backlog ROI, 3 thí nghiệm cần chạy |
+| `docs/product_decision.md` | Định nghĩa sản phẩm, cấu trúc 4 phần của bản án VN. ⚠️ **CŨ**: còn ghi multilingual-e5/Caddy/server 8GB/người dùng là luật sư |
 | `README.md` / `manager/README.md` | Tổng quan Phiên 1 / Phiên 2 |
